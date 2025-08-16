@@ -1,0 +1,147 @@
+# Core ML/DL Libraries
+torch>=2.0.0,<2.3.0
+torchvision>=0.15.0,<0.18.0
+torchaudio>=2.0.0,<2.3.0
+transformers>=4.30.0,<4.40.0
+datasets>=2.12.0,<2.20.0
+tokenizers>=0.13.0,<0.16.0
+
+# Time Series Foundation Models
+# Note: MOMENT model dependencies
+huggingface_hub>=0.15.0,<0.25.0
+accelerate>=0.20.0,<0.30.0
+
+# Scientific Computing
+numpy>=1.21.0,<1.27.0
+pandas>=2.0.0,<2.3.0
+scipy>=1.10.0,<1.14.0
+scikit-learn>=1.3.0,<1.5.0
+
+# Data Processing
+pyarrow>=12.0.0,<16.0.0
+fastparquet>=0.8.0,<2024.3.0
+h5py>=3.8.0,<3.12.0
+
+# Visualization
+matplotlib>=3.7.0,<3.10.0
+seaborn>=0.12.0,<0.14.0
+plotly>=5.14.0,<5.20.0
+ipywidgets>=8.0.0,<8.2.0
+
+# MLflow and Experiment Tracking
+mlflow>=2.4.0,<2.12.0
+mlflow-skinny>=2.4.0,<2.12.0
+
+# Configuration and Utilities
+pyyaml>=6.0,<6.1
+omegaconf>=2.3.0,<2.4.0
+hydra-core>=1.3.0,<1.4.0
+python-dotenv>=1.0.0,<1.1.0
+
+# Metrics and Evaluation
+rouge-score>=0.1.2,<0.2.0
+sacrebleu>=2.3.0,<2.4.0
+bert-score>=0.3.13,<0.4.0
+
+# Progress Bars and Logging
+tqdm>=4.65.0,<4.67.0
+rich>=13.3.0,<13.6.0
+loguru>=0.7.0,<0.8.0
+
+# Testing
+pytest>=7.3.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+pytest-mock>=3.10.0,<3.15.0
+pytest-xdist>=3.3.0,<3.6.0
+
+# Development Tools
+black>=23.3.0,<24.0.0
+isort>=5.12.0,<5.14.0
+flake8>=6.0.0,<7.1.0
+mypy>=1.3.0,<1.10.0
+pre-commit>=3.3.0,<3.7.0
+
+# Jupyter and Interactive Development
+jupyter>=1.0.0,<1.1.0
+jupyterlab>=4.0.0,<4.2.0
+notebook>=6.5.0,<7.2.0
+ipykernel>=6.23.0,<6.30.0
+
+# Memory and Performance Optimization
+psutil>=5.9.0,<5.10.0
+memory-profiler>=0.60.0,<0.62.0
+py-spy>=0.3.14,<0.4.0
+
+# Data Validation
+cerberus>=1.3.4,<1.4.0
+jsonschema>=4.17.0,<4.20.0
+
+# Parallel Processing
+joblib>=1.2.0,<1.4.0
+multiprocess>=0.70.14,<0.71.0
+
+# Cloud and Storage (Optional)
+boto3>=1.26.0,<1.29.0
+azure-storage-blob>=12.16.0,<12.19.0
+google-cloud-storage>=2.9.0,<2.11.0
+
+# Database Connectivity (Optional)
+sqlalchemy>=2.0.0,<2.1.0
+psycopg2-binary>=2.9.6,<2.10.0
+
+# API and Web Framework (Optional)
+fastapi>=0.95.0,<0.112.0
+uvicorn>=0.22.0,<0.30.0
+pydantic>=1.10.0,<2.8.0
+
+# Time Series Specific Libraries
+statsmodels>=0.14.0,<0.15.0
+arch>=5.3.0,<7.0.0
+pmdarima>=2.0.0,<2.1.0
+
+# Additional Utilities
+click>=8.1.0,<8.2.0
+colorama>=0.4.6,<0.5.0
+
+# Production Deployment
+gunicorn>=20.1.0,<22.0.0
+prometheus-client>=0.16.0,<0.21.0
+
+# Security
+cryptography>=40.0.0,<43.0.0
+
+# Documentation (Optional)
+sphinx>=6.2.0,<7.3.0
+sphinx-rtd-theme>=1.2.0,<2.4.0
+myst-parser>=2.0.0,<3.0.0
+
+# Development Environment Compatibility
+# Databricks Runtime Compatibility
+databricks-cli>=0.17.0,<0.19.0
+
+# Version Constraints for Stability
+# Pin critical versions to avoid breaking changes
+# Note: torch-audio and torch-vision are duplicates of torchaudio and torchvision above
+
+# Optional: CUDA-specific packages (uncomment if using GPU)
+# nvidia-ml-py3>=7.352.0,<12.536.0
+# pynvml>=11.4.1,<11.6.0
+
+# Optional: Distributed Training
+# torch-distributed>=0.1.0
+# deepspeed>=0.9.0,<0.11.0
+
+# Optional: Model Optimization
+# onnx>=1.14.0,<1.16.0
+# onnxruntime>=1.15.0,<1.17.0
+# tensorrt>=8.6.0,<9.1.0
+
+# Platform-specific dependencies
+# Windows-specific
+# pywin32>=306; sys_platform=="win32"
+
+# macOS-specific  
+# pyobjc>=9.0; sys_platform=="darwin"
+
+# Linux-specific
+# python-systemd>=234; sys_platform=="linux"

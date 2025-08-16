@@ -1,0 +1,196 @@
+# Data Configuration for Time-MMD Dataset
+# Production-ready data pipeline configuration
+
+# Dataset Configuration
+dataset:
+  name: "time_mmd"
+  version: "1.0"
+  source: "https://github.com/AdityaLab/Time-MMD"
+  
+  # Data Paths (DBFS paths for Databricks)
+  paths:
+    raw_data: "/dbfs/mllm/data/raw/time_mmd"
+    processed_data: "/dbfs/mllm/data/processed"
+    cache_dir: "/dbfs/mllm/data/cache"
+    splits_dir: "/dbfs/mllm/data/splits"
+
+# Domain Configuration
+domains:
+  included:
+    - "weather"
+    - "energy" 
+    - "finance"
+    - "health"
+    - "agriculture"
+    - "traffic"
+    - "environment"
+    - "economics"
+    - "social"
+  
+  # Domain-specific settings
+  domain_configs:
+    weather:
+      time_series_features: ["temperature", "humidity", "pressure", "wind_speed"]
+      text_sources: ["reports", "forecasts", "alerts"]
+      sampling_rate: "1H"
+    energy:
+      time_series_features: ["consumption", "production", "price", "demand"]
+      text_sources: ["market_reports", "policy_documents", "news"]
+      sampling_rate: "15min"
+    finance:
+      time_series_features: ["price", "volume", "returns", "volatility"]
+      text_sources: ["news", "analyst_reports", "earnings_calls"]
+      sampling_rate: "1min"
+
+# Data Splits
+splits:
+  train: 0.8
+  validation: 0.1
+  test: 0.1
+  
+  # Stratification
+  stratify_by: "domain"
+  shuffle: true
+  random_state: 42
+
+# Time Series Preprocessing
+time_series:
+  # Sequence parameters
+  max_length: 512
+  min_length: 32
+  stride: 1
+  overlap: 0.1
+  
+  # Normalization
+  normalization:
+    method: "z_score"  # Options: z_score, min_max, robust, none
+    per_feature: true
+    global_stats: false
+    
+  # Missing value handling
+  missing_values:
+    strategy: "interpolation"  # Options: interpolation, forward_fill, backward_fill, drop
+    interpolation_method: "linear"
+    max_gap_size: 10
+    
+  # Outlier detection
+  outlier_detection:
+    enabled: true
+    method: "iqr"  # Options: iqr, zscore, isolation_forest
+    threshold: 3.0
+    action: "clip"  # Options: clip, remove, interpolate
+    
+  # Data augmentation
+  augmentation:
+    enabled: true
+    jittering:
+      noise_factor: 0.01
+      probability: 0.5
+    scaling:
+      factor_range: [0.8, 1.2]
+      probability: 0.3
+    time_warping:
+      sigma: 0.2
+      knot: 4
+      probability: 0.3
+    masking:
+      mask_ratio: 0.15
+      probability: 0.4
+
+# Text Preprocessing
+text:
+  # Tokenization
+  tokenizer:
+    model_name: "gpt2-medium"
+    max_length: 512
+    padding: "max_length"
+    truncation: true
+    add_special_tokens: true
+    
+  # Text cleaning
+  cleaning:
+    lowercase: false
+    remove_html: true
+    remove_urls: true
+    remove_emails: true
+    remove_extra_whitespace: true
+    
+  # Text augmentation
+  augmentation:
+    enabled: false  # Disable for production
+    synonym_replacement:
+      probability: 0.1
+      num_words: 4
+    random_insertion:
+      probability: 0.1
+      num_words: 2
+    random_deletion:
+      probability: 0.1
+
+# Multimodal Alignment
+alignment:
+  # Timestamp matching
+  timestamp_tolerance: "5min"  # Tolerance for timestamp matching
+  interpolation_method: "linear"
+  
+  # Sequence alignment
+  alignment_strategy: "sliding_window"  # Options: fixed_window, sliding_window, dynamic
+  window_size: 256
+  overlap_ratio: 0.5
+  
+  # Data pairing
+  pairing:
+    require_exact_match: false
+    max_time_gap: "1H"
+    min_overlap: 0.7
+
+# Data Loading
+data_loading:
+  # Performance settings
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  
+  # Batch settings
+  batch_size: 16
+  drop_last: true
+  shuffle: true
+  
+  # Memory management
+  max_memory_usage: "16GB"
+  cache_size: 1000  # Number of samples to cache
+  lazy_loading: true
+
+# Quality Control
+quality_control:
+  # Data validation
+  min_time_series_length: 32
+  max_time_series_length: 1024
+  min_text_length: 10
+  max_text_length: 2048
+  
+  # Content filtering
+  filter_duplicates: true
+  filter_empty: true
+  filter_invalid_timestamps: true
+  
+  # Quality metrics
+  compute_statistics: true
+  log_data_quality: true
+
+# Caching
+caching:
+  enabled: true
+  cache_processed: true
+  cache_embeddings: false
+  cache_location: "/dbfs/mllm/data/cache"
+  max_cache_size: "50GB"
+  cache_compression: "lz4"
+
+# Monitoring
+monitoring:
+  log_data_stats: true
+  track_data_drift: true
+  sample_validation_frequency: 1000
+  alert_on_issues: true

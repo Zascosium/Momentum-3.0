@@ -1,0 +1,514 @@
+# Momentum-3.0 MLLM Project .gitignore
+# =====================================
+
+# Python
+# -------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+test-results/
+test-reports/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+momentum-mllm-env/
+conda-env/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Machine Learning & Data Science
+# --------------------------------
+
+# Large datasets and data files
+*.csv
+*.tsv
+*.json
+*.jsonl
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.mat
+*.xlsx
+*.xls
+*.db
+*.sqlite
+*.sqlite3
+
+# Specific data directories
+data/
+datasets/
+raw_data/
+processed_data/
+mllm_project/data/raw/
+mllm_project/data/processed/
+mllm_project/data/interim/
+mllm_project/data/external/
+
+# Model files and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.tflite
+*.bin
+*.safetensors
+models/
+checkpoints/
+saved_models/
+model_artifacts/
+mllm_project/models/saved/
+mllm_project/checkpoints/
+
+# Pre-trained models cache
+.cache/
+transformers_cache/
+huggingface/
+.transformers_cache/
+
+# MLflow
+mlruns/
+mlartifacts/
+.mlflow/
+mlflow_tracking/
+
+# Weights & Biases
+wandb/
+
+# TensorBoard logs
+logs/
+tensorboard_logs/
+tb_logs/
+runs/
+
+# Experiment outputs
+experiments/
+outputs/
+results/
+plots/
+figures/
+visualizations/
+mllm_project/outputs/
+mllm_project/plots/
+mllm_project/results/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Large text files and logs
+*.log
+*.out
+*.err
+nohup.out
+slurm-*.out
+
+# Databricks
+# -----------
+.databricks/
+databricks.cfg
+.databrickscfg
+
+# IDE and Editor
+# --------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.tmp
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# System Files
+# ------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Archives
+# --------
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Large media files
+# -----------------
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.wma
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.ico
+*.webp
+
+# Documentation builds
+# --------------------
+docs/_build/
+docs/build/
+site/
+
+# Sphinx
+_build/
+_static/
+_templates/
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
+*.toc
+
+# Configuration files with secrets
+# --------------------------------
+config.ini
+settings.ini
+secrets.yaml
+.secrets
+credentials.json
+.credentials
+*.key
+*.pem
+*.crt
+*.cert
+
+# Local configuration overrides
+local_config.yaml
+local_settings.yaml
+config_local.yaml
+settings_local.yaml
+
+# Environment-specific configs
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# Cloud provider configs
+.aws/
+.azure/
+.gcp/
+
+# Docker
+# ------
+Dockerfile.local
+docker-compose.override.yml
+.dockerignore
+
+# Kubernetes
+# ----------
+*.kubeconfig
+kustomization.yaml
+
+# Terraform
+# ---------
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Node.js (if any JS components)
+# ------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# R (if any R components)
+# -----------------------
+.RData
+.Rhistory
+.Rproj.user/
+
+# MATLAB
+# ------
+*.asv
+*.mex*
+
+# C/C++ (if any compiled extensions)
+# ----------------------------------
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Fortran
+# -------
+*.mod
+
+# Backup files
+# ------------
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+*~
+
+# Profiling
+# ---------
+*.prof
+*.lprof
+*.pstats
+
+# Memory dumps
+# ------------
+*.dmp
+core.*
+
+# Large temporary computation files
+# ---------------------------------
+*.tmp
+*.temp
+*.swp
+*.cache
+
+# Project-specific ignores
+# ------------------------
+
+# Time series data files (can be very large)
+*.ts
+*.timeseries
+time_mmd/
+Time-MMD/
+
+# Generated synthetic data
+synthetic_data/
+generated_data/
+
+# Evaluation outputs
+evaluation_results/
+benchmark_results/
+performance_logs/
+
+# Demo outputs
+demo_outputs/
+inference_outputs/
+
+# Training artifacts
+training_logs/
+training_outputs/
+loss_curves/
+
+# Model comparison files
+model_comparison/
+baseline_results/
+
+# Custom data formats
+*.mllm
+*.moment
+*.tsdata
+
+# Large configuration files
+large_config/
+full_config/
+
+# Distributed training files
+dist_training/
+multi_gpu/
+
+# Memory profiling outputs
+memory_profile/
+gpu_profile/
+
+# Custom caches
+.custom_cache/
+.model_cache/
+.data_cache/
+
+# Performance monitoring
+monitoring/
+metrics/
+dashboards/
+
+# API keys and tokens
+*.token
+api_keys/
+tokens/
+
+# SSL certificates
+*.crt
+*.key
+*.pem
+ssl/
+certs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+database/
+
+# Compressed archives of data/models
+data_archive/
+model_archive/
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+
+# Specific to this project
+# ------------------------
+# Add any project-specific large files or directories here
+
+# Example: if you have specific large model downloads
+# pretrained_models/
+# foundation_models/
+
+# Example: if you have specific large datasets
+# financial_data/
+# weather_data/
+# energy_data/
