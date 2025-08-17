@@ -215,25 +215,25 @@ class MultimodalTrainer:
         if optimizer_name == 'adamw':
             optimizer = torch.optim.AdamW(
                 model_params,
-                lr=optimizer_config.get('learning_rate', 5e-5),
-                weight_decay=optimizer_config.get('weight_decay', 0.01),
-                betas=(optimizer_config.get('beta1', 0.9), optimizer_config.get('beta2', 0.999)),
-                eps=optimizer_config.get('eps', 1e-8)
+                lr=float(optimizer_config.get('learning_rate', 5e-5)),
+                weight_decay=float(optimizer_config.get('weight_decay', 0.01)),
+                betas=(float(optimizer_config.get('beta1', 0.9)), float(optimizer_config.get('beta2', 0.999))),
+                eps=float(optimizer_config.get('eps', 1e-8))
             )
         elif optimizer_name == 'adam':
             optimizer = torch.optim.Adam(
                 model_params,
-                lr=optimizer_config.get('learning_rate', 5e-5),
-                weight_decay=optimizer_config.get('weight_decay', 0.01),
-                betas=(optimizer_config.get('beta1', 0.9), optimizer_config.get('beta2', 0.999)),
-                eps=optimizer_config.get('eps', 1e-8)
+                lr=float(optimizer_config.get('learning_rate', 5e-5)),
+                weight_decay=float(optimizer_config.get('weight_decay', 0.01)),
+                betas=(float(optimizer_config.get('beta1', 0.9)), float(optimizer_config.get('beta2', 0.999))),
+                eps=float(optimizer_config.get('eps', 1e-8))
             )
         elif optimizer_name == 'sgd':
             optimizer = torch.optim.SGD(
                 model_params,
-                lr=optimizer_config.get('learning_rate', 5e-5),
-                momentum=optimizer_config.get('momentum', 0.9),
-                weight_decay=optimizer_config.get('weight_decay', 0.01)
+                lr=float(optimizer_config.get('learning_rate', 5e-5)),
+                momentum=float(optimizer_config.get('momentum', 0.9)),
+                weight_decay=float(optimizer_config.get('weight_decay', 0.01))
             )
         else:
             raise ValueError(f"Unsupported optimizer: {optimizer_name}")
