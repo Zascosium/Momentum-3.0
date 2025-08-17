@@ -1,0 +1,165 @@
+# Pipeline Configuration
+# This file defines the configuration for the end-to-end pipeline
+
+# Pipeline metadata
+name: "multimodal_llm_pipeline"
+version: "1.0.0"
+description: "End-to-end pipeline for multimodal LLM training and deployment"
+
+# Stage configurations
+explore:
+  enabled: true
+  description: "Data exploration and quality assessment"
+  data_dir: null  # Will use default from main config
+  sample_size: 1000
+  generate_report: true
+  cache_enabled: true
+  
+  # Quality thresholds
+  quality_thresholds:
+    min_quality_score: 70
+    min_samples: 100
+    
+  # Domains to analyze
+  domains:
+    - weather
+    - finance
+    - energy
+
+train:
+  enabled: true
+  description: "Model training with MLflow tracking"
+  experiment_name: "multimodal_llm_pipeline"
+  epochs: 10
+  resume_from: null
+  use_wandb: false
+  
+  # Training parameters (overrides)
+  batch_size: null  # Use default from training_config
+  learning_rate: null  # Use default from training_config
+  
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 5
+    min_delta: 0.001
+  
+  # Checkpointing
+  checkpoint_frequency: 1
+  save_best_only: true
+
+evaluate:
+  enabled: true
+  description: "Comprehensive model evaluation"
+  model_path: null  # Will use best model from training
+  test_split: "test"
+  generate_plots: true
+  save_predictions: false
+  
+  # Evaluation parameters
+  batch_size: 32
+  
+  # Metrics to compute
+  metrics:
+    - perplexity
+    - accuracy
+    - top_k_accuracy
+    - bleu
+    - rouge
+
+demo:
+  enabled: true
+  description: "Interactive inference demonstration"
+  model_path: null  # Will use best model from training
+  num_examples: 10
+  temperature: 0.8
+  streaming: false
+  
+  # Demo scenarios
+  scenarios:
+    - standard
+    - batch
+    - streaming
+    - benchmark
+
+# Global settings
+global:
+  # Device configuration
+  device: "auto"  # auto, cuda, cpu
+  
+  # Logging
+  log_level: "INFO"
+  log_file: "pipeline.log"
+  
+  # MLflow
+  mlflow:
+    tracking_uri: null  # Use default
+    artifact_location: null  # Use default
+    
+  # Distributed training
+  distributed:
+    enabled: false
+    backend: "nccl"
+    
+  # Mixed precision
+  mixed_precision:
+    enabled: false
+    
+# Output settings
+output:
+  # Base output directory
+  base_dir: "./pipeline_results"
+  
+  # Stage-specific subdirectories
+  structure:
+    exploration: "01_exploration"
+    training: "02_training"
+    evaluation: "03_evaluation"
+    demo: "04_demo"
+    
+  # Report generation
+  generate_final_report: true
+  report_format: "html"  # html, markdown, pdf
+
+# Validation rules
+validation:
+  # Minimum requirements
+  min_gpu_memory: 8  # GB
+  min_disk_space: 50  # GB
+  
+  # Data validation
+  data:
+    min_samples: 100
+    max_missing_ratio: 0.1
+    
+  # Model validation
+  model:
+    min_accuracy: 0.3
+    max_perplexity: 100
+
+# Pipeline execution options
+execution:
+  # Continue on stage failure
+  continue_on_failure: false
+  
+  # Parallel stage execution (if dependencies allow)
+  parallel_stages: false
+  
+  # Retry failed stages
+  retry_on_failure: true
+  max_retries: 2
+  
+  # Notifications
+  notifications:
+    enabled: false
+    email: null
+    slack_webhook: null
+
+# Stage dependencies
+dependencies:
+  train:
+    - explore
+  evaluate:
+    - train
+  demo:
+    - train
