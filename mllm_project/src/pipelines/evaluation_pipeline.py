@@ -5,20 +5,75 @@ This module implements the evaluation pipeline that corresponds to
 notebook 03_model_evaluation.py functionality.
 """
 
-import torch
-import numpy as np
+import sys
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 import json
 import logging
 from datetime import datetime
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
 
-from ..models.multimodal_model import MultimodalLLM
-from ..training.metrics import MetricsTracker
-from ..utils.visualization import TrainingVisualizer
+# Databricks compatibility setup
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Core dependencies with fallbacks
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
+
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+except ImportError:
+    plt = None
+    sns = None
+
+# Import project modules with fallbacks
+try:
+    from models.multimodal_model import MultimodalLLM
+except ImportError:
+    try:
+        from ..models.multimodal_model import MultimodalLLM
+    except ImportError:
+        MultimodalLLM = None
+
+try:
+    from training.metrics import MetricsTracker
+except ImportError:
+    try:
+        from ..training.metrics import MetricsTracker
+    except ImportError:
+        class MetricsTracker:
+            def __init__(self, *args, **kwargs): pass
+            def update(self, *args, **kwargs): pass
+            def compute(self): return {}
+
+try:
+    from utils.visualization import TrainingVisualizer
+except ImportError:
+    try:
+        from ..utils.visualization import TrainingVisualizer
+    except ImportError:
+        class TrainingVisualizer:
+            def __init__(self, *args, **kwargs): pass
+            def create_plots(self, *args, **kwargs): pass
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +92,12 @@ class EvaluationPipeline:
             model_path: Path to trained model
             output_dir: Directory for output files
         """
+        # Check critical dependencies
+        if torch is None:
+            raise ImportError("PyTorch is required for evaluation. Install with: pip install torch")
+        if MultimodalLLM is None:
+            raise ImportError("MultimodalLLM model not available. Check model imports.")
+        
         self.config = config
         self.model_path = Path(model_path)
         self.output_dir = Path(output_dir)

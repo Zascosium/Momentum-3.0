@@ -4,16 +4,35 @@ Model Serving API
 This module provides a REST API for model inference.
 """
 
+import sys
+import os
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-import torch
 import numpy as np
 from datetime import datetime
 import json
 import time
 
-# FastAPI imports
+# Databricks compatibility setup
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Core dependencies with fallbacks
+try:
+    import torch
+except ImportError:
+    torch = None
+
+# FastAPI imports with better error handling
 try:
     from fastapi import FastAPI, HTTPException, Depends, Security
     from fastapi.security import APIKeyHeader
@@ -23,10 +42,36 @@ try:
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
-    logging.warning("FastAPI not available. Install with: pip install fastapi uvicorn")
+    # Create mock classes for when FastAPI is not available
+    class FastAPI:
+        def __init__(self, *args, **kwargs): pass
+    class HTTPException(Exception): pass
+    class BaseModel: pass
+    class Field: pass
+    def Depends(*args, **kwargs): pass
+    def Security(*args, **kwargs): pass
+    class APIKeyHeader: 
+        def __init__(self, *args, **kwargs): pass
+    class CORSMiddleware: pass
+    uvicorn = None
 
-from ..models.multimodal_model import MultimodalLLM
-from ..utils.inference_utils import create_inference_pipeline
+# Import project modules with fallbacks
+try:
+    from models.multimodal_model import MultimodalLLM
+except ImportError:
+    try:
+        from ..models.multimodal_model import MultimodalLLM
+    except ImportError:
+        MultimodalLLM = None
+
+try:
+    from utils.inference_utils import create_inference_pipeline
+except ImportError:
+    try:
+        from ..utils.inference_utils import create_inference_pipeline
+    except ImportError:
+        def create_inference_pipeline(*args, **kwargs):
+            return None
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +133,13 @@ class ModelServingAPI:
             enable_cors: Enable CORS support
             api_key: Optional API key for authentication
         """
+        # Check critical dependencies
         if not FASTAPI_AVAILABLE:
             raise ImportError("FastAPI is required for model serving. Install with: pip install fastapi uvicorn")
+        if torch is None:
+            raise ImportError("PyTorch is required for model serving. Install with: pip install torch")
+        if MultimodalLLM is None:
+            raise ImportError("MultimodalLLM model not available. Check model imports.")
         
         self.config = config
         self.model_path = Path(model_path)

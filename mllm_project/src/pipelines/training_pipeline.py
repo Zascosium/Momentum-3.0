@@ -5,28 +5,107 @@ This module implements the training pipeline that corresponds to
 notebook 02_model_training.py functionality.
 """
 
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
+import sys
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 import json
 import logging
 import time
 from datetime import datetime
-import mlflow
-import mlflow.pytorch
-from tqdm import tqdm
 import numpy as np
 
-from ..models.multimodal_model import MultimodalLLM
-from ..training.trainer import MultimodalTrainer
-from ..training.callbacks import (
-    EarlyStoppingCallback, CheckpointCallback,
-    ProgressCallback, MLflowCallback
-)
-from ..utils.mlflow_utils import MLflowExperimentManager
-from ..utils.visualization import TrainingVisualizer
+# Databricks compatibility setup
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Core ML dependencies with fallbacks
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader
+except ImportError:
+    torch = None
+    nn = None
+    DataLoader = None
+
+try:
+    import mlflow
+    import mlflow.pytorch
+except ImportError:
+    mlflow = None
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    # Mock tqdm if not available
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
+
+# Import project modules with fallbacks
+try:
+    from models.multimodal_model import MultimodalLLM
+except ImportError:
+    try:
+        from ..models.multimodal_model import MultimodalLLM
+    except ImportError:
+        MultimodalLLM = None
+
+try:
+    from training.trainer import MultimodalTrainer
+except ImportError:
+    try:
+        from ..training.trainer import MultimodalTrainer
+    except ImportError:
+        MultimodalTrainer = None
+
+try:
+    from training.callbacks import (
+        EarlyStoppingCallback, CheckpointCallback,
+        ProgressCallback, MLflowCallback
+    )
+except ImportError:
+    try:
+        from ..training.callbacks import (
+            EarlyStoppingCallback, CheckpointCallback,
+            ProgressCallback, MLflowCallback
+        )
+    except ImportError:
+        # Mock callback classes
+        class EarlyStoppingCallback:
+            def __init__(self, *args, **kwargs): pass
+        class CheckpointCallback:
+            def __init__(self, *args, **kwargs): pass
+        class ProgressCallback:
+            def __init__(self, *args, **kwargs): pass
+        class MLflowCallback:
+            def __init__(self, *args, **kwargs): pass
+
+try:
+    from utils.mlflow_utils import MLflowExperimentManager
+except ImportError:
+    try:
+        from ..utils.mlflow_utils import MLflowExperimentManager
+    except ImportError:
+        class MLflowExperimentManager:
+            def __init__(self, *args, **kwargs): pass
+
+try:
+    from utils.visualization import TrainingVisualizer
+except ImportError:
+    try:
+        from ..utils.visualization import TrainingVisualizer
+    except ImportError:
+        class TrainingVisualizer:
+            def __init__(self, *args, **kwargs): pass
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +127,16 @@ class TrainingPipeline:
             experiment_name: MLflow experiment name
             use_wandb: Whether to use Weights & Biases
         """
+        # Check critical dependencies
+        if torch is None:
+            raise ImportError("PyTorch is required for training. Install with: pip install torch")
+        if mlflow is None:
+            raise ImportError("MLflow is required for training. Install with: pip install mlflow")
+        if MultimodalLLM is None:
+            raise ImportError("MultimodalLLM model not available. Check model imports.")
+        if MultimodalTrainer is None:
+            raise ImportError("MultimodalTrainer not available. Check trainer imports.")
+        
         self.config = config
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)

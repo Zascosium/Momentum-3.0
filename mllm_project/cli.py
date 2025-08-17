@@ -56,7 +56,7 @@ if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
 # Import pipeline modules with error handling
 try:
     from src.pipelines.exploration_pipeline import DataExplorationPipeline
-except ImportError as e:
+except (ImportError, ValueError) as e:
     DataExplorationPipeline = None
     error_msg = f"Could not import DataExplorationPipeline: {e}"
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
@@ -72,7 +72,7 @@ except ImportError as e:
             # Try direct import without src prefix
             from pipelines.exploration_pipeline import DataExplorationPipeline
             logging.info("Successfully imported DataExplorationPipeline using alternative path")
-        except ImportError:
+        except (ImportError, ValueError):
             try:
                 # Try with absolute path
                 import importlib.util
@@ -91,31 +91,31 @@ except ImportError as e:
 
 try:
     from src.pipelines.training_pipeline import TrainingPipeline
-except ImportError as e:
+except (ImportError, ValueError) as e:
     TrainingPipeline = None
     logging.warning(f"Could not import TrainingPipeline: {e}")
 
 try:
     from src.pipelines.evaluation_pipeline import EvaluationPipeline
-except ImportError as e:
+except (ImportError, ValueError) as e:
     EvaluationPipeline = None
     logging.warning(f"Could not import EvaluationPipeline: {e}")
 
 try:
     from src.pipelines.inference_pipeline import InferencePipeline
-except ImportError as e:
+except (ImportError, ValueError) as e:
     InferencePipeline = None
     logging.warning(f"Could not import InferencePipeline: {e}")
 
 try:
     from src.pipelines.orchestrator import PipelineOrchestrator
-except ImportError as e:
+except (ImportError, ValueError) as e:
     PipelineOrchestrator = None
     logging.warning(f"Could not import PipelineOrchestrator: {e}")
 
 try:
     from src.pipelines.serving import ModelServingAPI
-except ImportError as e:
+except (ImportError, ValueError) as e:
     ModelServingAPI = None
     logging.warning(f"Could not import ModelServingAPI: {e}")
 

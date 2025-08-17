@@ -5,8 +5,8 @@ This module implements the inference pipeline that corresponds to
 notebook 04_inference_demo.py functionality.
 """
 
-import torch
-import numpy as np
+import sys
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional, Generator
 import json
@@ -14,10 +14,53 @@ import logging
 import time
 from datetime import datetime
 import random
+import numpy as np
 
-from ..models.multimodal_model import MultimodalLLM
-from ..utils.inference_utils import create_inference_pipeline
-from ..utils.visualization import TrainingVisualizer
+# Databricks compatibility setup
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Core dependencies with fallbacks
+try:
+    import torch
+except ImportError:
+    torch = None
+
+# Import project modules with fallbacks
+try:
+    from models.multimodal_model import MultimodalLLM
+except ImportError:
+    try:
+        from ..models.multimodal_model import MultimodalLLM
+    except ImportError:
+        MultimodalLLM = None
+
+try:
+    from utils.inference_utils import create_inference_pipeline
+except ImportError:
+    try:
+        from ..utils.inference_utils import create_inference_pipeline
+    except ImportError:
+        def create_inference_pipeline(*args, **kwargs):
+            return None
+
+try:
+    from utils.visualization import TrainingVisualizer
+except ImportError:
+    try:
+        from ..utils.visualization import TrainingVisualizer
+    except ImportError:
+        class TrainingVisualizer:
+            def __init__(self, *args, **kwargs): pass
+            def create_plots(self, *args, **kwargs): pass
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +79,12 @@ class InferencePipeline:
             model_path: Path to trained model
             demo_dir: Directory for demo outputs
         """
+        # Check critical dependencies
+        if torch is None:
+            raise ImportError("PyTorch is required for inference. Install with: pip install torch")
+        if MultimodalLLM is None:
+            raise ImportError("MultimodalLLM model not available. Check model imports.")
+        
         self.config = config
         self.model_path = Path(model_path)
         self.demo_dir = Path(demo_dir)

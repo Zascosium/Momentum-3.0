@@ -4,6 +4,8 @@ Pipeline Orchestrator
 This module provides orchestration for running the complete end-to-end pipeline.
 """
 
+import sys
+import os
 import json
 import logging
 import time
@@ -12,10 +14,50 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import yaml
 
-from .exploration_pipeline import DataExplorationPipeline
-from .training_pipeline import TrainingPipeline
-from .evaluation_pipeline import EvaluationPipeline
-from .inference_pipeline import InferencePipeline
+# Databricks compatibility setup
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Import pipeline modules with fallbacks
+try:
+    from .exploration_pipeline import DataExplorationPipeline
+except ImportError:
+    try:
+        from exploration_pipeline import DataExplorationPipeline
+    except ImportError:
+        DataExplorationPipeline = None
+
+try:
+    from .training_pipeline import TrainingPipeline
+except ImportError:
+    try:
+        from training_pipeline import TrainingPipeline
+    except ImportError:
+        TrainingPipeline = None
+
+try:
+    from .evaluation_pipeline import EvaluationPipeline
+except ImportError:
+    try:
+        from evaluation_pipeline import EvaluationPipeline
+    except ImportError:
+        EvaluationPipeline = None
+
+try:
+    from .inference_pipeline import InferencePipeline
+except ImportError:
+    try:
+        from inference_pipeline import InferencePipeline
+    except ImportError:
+        InferencePipeline = None
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +76,10 @@ class PipelineOrchestrator:
             output_dir: Directory for pipeline outputs
             verbose: Enable verbose logging
         """
+        # Check if any pipelines are available
+        if not any([DataExplorationPipeline, TrainingPipeline, EvaluationPipeline, InferencePipeline]):
+            raise ImportError("No pipelines available. Check pipeline imports and dependencies.")
+        
         self.config = config
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

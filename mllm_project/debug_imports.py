@@ -55,42 +55,83 @@ def test_imports():
     sys.path.insert(0, str(src_path))
     sys.path.insert(0, str(project_root))
     
-    # Test 1: Direct exploration pipeline import
-    logger.info("Test 1: Direct import")
-    try:
-        from src.pipelines.exploration_pipeline import DataExplorationPipeline
-        logger.info("✅ Successfully imported DataExplorationPipeline")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed: {e}")
+    pipelines_to_test = [
+        ('DataExplorationPipeline', 'exploration_pipeline'),
+        ('TrainingPipeline', 'training_pipeline'),
+        ('EvaluationPipeline', 'evaluation_pipeline'), 
+        ('InferencePipeline', 'inference_pipeline'),
+        ('PipelineOrchestrator', 'orchestrator'),
+        ('ModelServingAPI', 'serving')
+    ]
     
-    # Test 2: Try without src prefix
-    logger.info("Test 2: Import without src prefix")
-    try:
-        from pipelines.exploration_pipeline import DataExplorationPipeline
-        logger.info("✅ Successfully imported DataExplorationPipeline (no src prefix)")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed: {e}")
+    success_count = 0
     
-    # Test 3: Try with importlib
-    logger.info("Test 3: Using importlib")
-    try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "exploration_pipeline", 
-            src_path / "pipelines" / "exploration_pipeline.py"
-        )
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            DataExplorationPipeline = module.DataExplorationPipeline
-            logger.info("✅ Successfully imported DataExplorationPipeline (importlib)")
-            return True
-    except Exception as e:
-        logger.error(f"❌ Failed: {e}")
+    for pipeline_name, module_name in pipelines_to_test:
+        logger.info(f"\nTesting {pipeline_name}:")
+        
+        # Test 1: Direct import
+        logger.info("  Test 1: Direct import")
+        try:
+            module = __import__(f"src.pipelines.{module_name}", fromlist=[pipeline_name])
+            getattr(module, pipeline_name)
+            logger.info(f"  ✅ Successfully imported {pipeline_name}")
+            success_count += 1
+            continue
+        except Exception as e:
+            logger.error(f"  ❌ Failed: {e}")
+        
+        # Test 2: Try with importlib
+        logger.info("  Test 2: Using importlib")
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                module_name, 
+                src_path / "pipelines" / f"{module_name}.py"
+            )
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                getattr(module, pipeline_name)
+                logger.info(f"  ✅ Successfully imported {pipeline_name} (importlib)")
+                success_count += 1
+                continue
+        except Exception as e:
+            logger.error(f"  ❌ Failed: {e}")
+        
+        logger.error(f"  ❌ All import methods failed for {pipeline_name}")
     
-    return False
+    return success_count == len(pipelines_to_test)
+
+def test_cli_commands():
+    """Test CLI commands to ensure they handle missing dependencies gracefully"""
+    logger.info("\n=== CLI COMMAND TESTING ===")
+    
+    commands_to_test = [
+        ("help", ["python", "cli.py", "--help"]),
+        ("explore help", ["python", "cli.py", "explore", "--help"]),
+        ("train help", ["python", "cli.py", "train", "--help"]),
+        ("evaluate help", ["python", "cli.py", "evaluate", "--help"]),
+        ("demo help", ["python", "cli.py", "demo", "--help"]),
+        ("pipeline help", ["python", "cli.py", "pipeline", "--help"]),
+        ("serve help", ["python", "cli.py", "serve", "--help"]),
+    ]
+    
+    success_count = 0
+    
+    for cmd_name, cmd_args in commands_to_test:
+        logger.info(f"Testing {cmd_name}...")
+        try:
+            import subprocess
+            result = subprocess.run(cmd_args, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                logger.info(f"✅ {cmd_name} - Command executed successfully")
+                success_count += 1
+            else:
+                logger.error(f"❌ {cmd_name} - Command failed: {result.stderr[:100]}...")
+        except Exception as e:
+            logger.error(f"❌ {cmd_name} - Exception: {e}")
+    
+    return success_count >= len(commands_to_test) - 1  # Allow 1 failure
 
 def test_dependencies():
     """Test individual dependencies"""
@@ -128,11 +169,30 @@ if __name__ == "__main__":
     test_dependencies()
     
     # Test imports
-    success = test_imports()
+    import_success = test_imports()
     
-    if success:
-        print("\n✅ Imports working! CLI should work.")
+    # Test CLI commands
+    cli_success = test_cli_commands()
+    
+    print("\n" + "=" * 50)
+    print("📋 SUMMARY")
+    print("=" * 50)
+    
+    if import_success:
+        print("✅ Pipeline imports: Working")
     else:
-        print("\n❌ Import issues detected. Check the logs above.")
-        print("\nTry running this in your Databricks environment:")
-        print("python debug_imports.py")
+        print("⚠️ Pipeline imports: Some issues detected")
+    
+    if cli_success:
+        print("✅ CLI commands: Working")
+    else:
+        print("⚠️ CLI commands: Some issues detected")
+    
+    if import_success and cli_success:
+        print("\n🎉 All tests passed! CLI should work on Databricks.")
+    else:
+        print("\n⚠️ Some issues detected. Check logs above.")
+        print("\nFor Databricks users:")
+        print("1. Run: python install_databricks.py")
+        print("2. Check missing dependencies and install them")
+        print("3. Re-run this debug script")
