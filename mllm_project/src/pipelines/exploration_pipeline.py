@@ -16,10 +16,13 @@ import logging
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
+import sys
 
-from ..data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
-from ..utils.visualization import TrainingVisualizer
-from ..utils.config_loader import load_config_for_training
+sys.path.append(str(Path(__file__).parent / 'data'))
+sys.path.append(str(Path(__file__).parent / 'utils'))
+from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+from utils.visualization import TrainingVisualizer
+from utils.config_loader import load_config_for_training
 
 logger = logging.getLogger(__name__)
 
