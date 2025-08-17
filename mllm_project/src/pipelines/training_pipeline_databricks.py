@@ -151,7 +151,7 @@ class TrainingPipeline:
         print(f"✅ Training pipeline initialized")
         print(f"   Device: {self.device}")
         print(f"   Checkpoint dir: {self.checkpoint_dir}")
-        print(f"   Experiment: {experiment_name}")
+        print(f"   Experiment: {self.experiment_name}")
     
     def _create_training_dataloader(self):
         """Create a training dataloader with synthetic data for testing."""
