@@ -53,71 +53,50 @@ if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
         if os.path.exists(db_path):
             sys.path.insert(0, db_path)
 
-# Import pipeline modules with error handling
-try:
-    from src.pipelines.exploration_pipeline import DataExplorationPipeline
-except (ImportError, ValueError) as e:
-    DataExplorationPipeline = None
-    error_msg = f"Could not import DataExplorationPipeline: {e}"
-    if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
-        error_msg += f"\nDatabricks detected. Current sys.path: {sys.path[:3]}..."
-        error_msg += f"\nWorking directory: {os.getcwd()}"
-        error_msg += f"\nProject root exists: {project_root.exists()}"
-        error_msg += f"\nSrc path exists: {src_path.exists()}"
-    logging.warning(error_msg)
-    
-    # Try alternative import paths for Databricks
-    if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+# Enhanced import function for Databricks compatibility
+def import_pipeline_class(pipeline_name, module_name):
+    """Import pipeline class with multiple fallback strategies"""
+    try:
+        # Method 1: Standard import
+        module = __import__(f"src.pipelines.{module_name}", fromlist=[pipeline_name])
+        return getattr(module, pipeline_name)
+    except (ImportError, ValueError) as e:
+        logging.warning(f"Standard import failed for {pipeline_name}: {e}")
+        
+        # Method 2: Direct file import (Databricks fallback)
         try:
-            # Try direct import without src prefix
-            from pipelines.exploration_pipeline import DataExplorationPipeline
-            logging.info("Successfully imported DataExplorationPipeline using alternative path")
-        except (ImportError, ValueError):
-            try:
-                # Try with absolute path
-                import importlib.util
-                spec = importlib.util.spec_from_file_location(
-                    "exploration_pipeline", 
-                    src_path / "pipelines" / "exploration_pipeline.py"
-                )
+            import importlib.util
+            pipeline_file = src_path / "pipelines" / f"{module_name}.py"
+            if pipeline_file.exists():
+                spec = importlib.util.spec_from_file_location(module_name, pipeline_file)
                 if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
-                    DataExplorationPipeline = module.DataExplorationPipeline
-                    logging.info("Successfully imported DataExplorationPipeline using direct file import")
-            except Exception as e2:
-                logging.warning(f"Alternative import methods also failed: {e2}")
-                DataExplorationPipeline = None
+                    pipeline_class = getattr(module, pipeline_name)
+                    logging.info(f"Successfully imported {pipeline_name} using direct file import")
+                    return pipeline_class
+            logging.warning(f"Pipeline file not found: {pipeline_file}")
+        except Exception as e2:
+            logging.warning(f"Direct file import failed for {pipeline_name}: {e2}")
+        
+        # Method 3: Try without src prefix (last resort)
+        try:
+            module = __import__(f"pipelines.{module_name}", fromlist=[pipeline_name])
+            pipeline_class = getattr(module, pipeline_name)
+            logging.info(f"Successfully imported {pipeline_name} without src prefix")
+            return pipeline_class
+        except Exception as e3:
+            logging.warning(f"All import methods failed for {pipeline_name}: {e3}")
+        
+        return None
 
-try:
-    from src.pipelines.training_pipeline import TrainingPipeline
-except (ImportError, ValueError) as e:
-    TrainingPipeline = None
-    logging.warning(f"Could not import TrainingPipeline: {e}")
-
-try:
-    from src.pipelines.evaluation_pipeline import EvaluationPipeline
-except (ImportError, ValueError) as e:
-    EvaluationPipeline = None
-    logging.warning(f"Could not import EvaluationPipeline: {e}")
-
-try:
-    from src.pipelines.inference_pipeline import InferencePipeline
-except (ImportError, ValueError) as e:
-    InferencePipeline = None
-    logging.warning(f"Could not import InferencePipeline: {e}")
-
-try:
-    from src.pipelines.orchestrator import PipelineOrchestrator
-except (ImportError, ValueError) as e:
-    PipelineOrchestrator = None
-    logging.warning(f"Could not import PipelineOrchestrator: {e}")
-
-try:
-    from src.pipelines.serving import ModelServingAPI
-except (ImportError, ValueError) as e:
-    ModelServingAPI = None
-    logging.warning(f"Could not import ModelServingAPI: {e}")
+# Import pipeline modules with enhanced error handling
+DataExplorationPipeline = import_pipeline_class("DataExplorationPipeline", "exploration_pipeline")
+TrainingPipeline = import_pipeline_class("TrainingPipeline", "training_pipeline") 
+EvaluationPipeline = import_pipeline_class("EvaluationPipeline", "evaluation_pipeline")
+InferencePipeline = import_pipeline_class("InferencePipeline", "inference_pipeline")
+PipelineOrchestrator = import_pipeline_class("PipelineOrchestrator", "orchestrator")
+ModelServingAPI = import_pipeline_class("ModelServingAPI", "serving")
 
 try:
     from src.utils.cli_utils import setup_logging, print_banner, validate_paths
