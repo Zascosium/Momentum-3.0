@@ -167,7 +167,7 @@ class TrainingPipeline:
                 import os
                 if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
                     # Use Databricks workspace path format
-                    experiment_name = f"/Users/{os.environ.get('USER', 'databricks')}/{self.experiment_name}"
+                    experiment_name = f"/Users/tarek.buerner@porsche.de/Momentum-3/{self.experiment_name}"
                 else:
                     # Use regular name for local environments
                     experiment_name = self.experiment_name
