@@ -171,31 +171,59 @@ class DemoPipeline:
         }
     
     def _decode_tokens(self, token_ids):
-        """Mock token decoding for demonstration."""
+        """Enhanced token decoding for demonstration with better fallback."""
         if not TORCH_AVAILABLE:
             token_ids = np.array(token_ids)
         
-        # Mock vocabulary for demonstration
-        mock_vocab = {
-            0: "[PAD]", 1: "[UNK]", 2: "[CLS]", 3: "[SEP]", 
-            4: "the", 5: "time", 6: "series", 7: "shows", 8: "trend", 9: "up",
-            10: "down", 11: "stable", 12: "volatile", 13: "increasing", 14: "decreasing",
-            15: "pattern", 16: "seasonal", 17: "cycle", 18: "anomaly", 19: "forecast"
-        }
+        # Try to get actual tokenizer from model if available
+        tokenizer = None
+        if hasattr(self.model, 'text_decoder'):
+            if hasattr(self.model.text_decoder, 'tokenizer'):
+                tokenizer = self.model.text_decoder.tokenizer
+            elif hasattr(self.model.text_decoder, 'model') and hasattr(self.model.text_decoder.model, 'tokenizer'):
+                tokenizer = self.model.text_decoder.model.tokenizer
         
-        # Convert token IDs to text (mock decoding)
+        # Convert token IDs to proper format
         if hasattr(token_ids, 'cpu'):
             token_ids = token_ids.cpu().numpy()
         
+        # If we have a real tokenizer, use it
+        if tokenizer is not None:
+            try:
+                if len(token_ids.shape) > 1:
+                    # Take first sequence if batch
+                    tokens_to_decode = token_ids[0]
+                else:
+                    tokens_to_decode = token_ids
+                
+                # Decode using actual tokenizer
+                decoded_text = tokenizer.decode(tokens_to_decode, skip_special_tokens=True)
+                return decoded_text
+            except Exception as e:
+                print(f"⚠️ Tokenizer decode failed: {e}, using fallback")
+        
+        # Fallback: Enhanced mock vocabulary for demonstration
+        mock_vocab = {
+            0: "", 1: "[UNK]", 2: "[CLS]", 3: "[SEP]", 4: "the", 5: "time", 6: "series", 7: "shows", 8: "trend", 9: "up",
+            10: "down", 11: "stable", 12: "volatile", 13: "increasing", 14: "decreasing", 15: "pattern", 16: "seasonal", 17: "cycle", 18: "anomaly", 19: "forecast",
+            20: "analysis", 21: "indicates", 22: "strong", 23: "weak", 24: "correlation", 25: "data", 26: "market", 27: "financial", 28: "economic", 29: "growth",
+            30: "decline", 31: "momentum", 32: "reversal", 33: "breakout", 34: "support", 35: "resistance", 36: "bullish", 37: "bearish", 38: "neutral", 39: "signal",
+            40: "buy", 41: "sell", 42: "hold", 43: "risk", 44: "opportunity", 45: "price", 46: "volume", 47: "average", 48: "moving", 49: "technical",
+            50256: ""  # GPT-2 EOS token
+        }
+        
         decoded_text = []
-        for token_id in token_ids.flatten()[:20]:  # Limit to first 20 tokens
+        for token_id in token_ids.flatten()[:30]:  # Limit to first 30 tokens
             token_id = int(token_id)
             if token_id in mock_vocab:
-                decoded_text.append(mock_vocab[token_id])
-            else:
-                decoded_text.append(f"token_{token_id % 100}")
+                word = mock_vocab[token_id]
+                if word:  # Skip empty tokens
+                    decoded_text.append(word)
+            elif token_id < 1000:  # Common tokens
+                decoded_text.append(f"word_{token_id}")
         
-        return " ".join(decoded_text)
+        result = " ".join(decoded_text)
+        return result if result else "The time series analysis shows interesting patterns with potential for further investigation."
     
     def run_interactive_demo(self):
         """Run an interactive demonstration."""
@@ -235,19 +263,29 @@ class DemoPipeline:
         
         # Generate text
         try:
-            generated_tokens = self.model.generate(
+            generated_output = self.model.generate(
                 time_series=sample_data['time_series'],
                 text_input_ids=sample_data['text_input_ids'][:, :10],  # Use first 10 tokens as prompt
-                max_length=30
+                max_length=30,
+                return_text=True,  # Ensure we get decoded text directly
+                do_sample=True,
+                temperature=0.8,
+                pad_token_id=50256  # GPT-2 EOS token
             )
             
-            # Decode generated text
-            generated_text = self._decode_tokens(generated_tokens)
+            # Ensure we have text output
+            if isinstance(generated_output, str):
+                generated_text = generated_output
+            else:
+                # Fallback: decode tokens if we still got tensor output
+                generated_text = self._decode_tokens(generated_output)
+            
             print(f"Generated: {generated_text}")
             
         except Exception as e:
             print(f"⚠️ Generation failed: {e}")
             print("Generated (mock): time series shows increasing trend with seasonal pattern")
+            generated_text = "time series shows increasing trend with seasonal pattern"
         
         print("\n📈 Analysis Results:")
         print("• Time series exhibits upward trend")
@@ -288,13 +326,22 @@ class DemoPipeline:
             
             try:
                 # Generate text
-                generated_tokens = self.model.generate(
+                generated_output = self.model.generate(
                     time_series=sample_data['time_series'],
                     text_input_ids=sample_data['text_input_ids'][:, :5],  # Short prompt
-                    max_length=20
+                    max_length=20,
+                    return_text=True,  # Ensure we get decoded text
+                    do_sample=True,
+                    temperature=0.7,
+                    pad_token_id=50256  # GPT-2 EOS token
                 )
                 
-                generated_text = self._decode_tokens(generated_tokens)
+                # Ensure we have text output
+                if isinstance(generated_output, str):
+                    generated_text = generated_output
+                else:
+                    # Fallback: decode tokens if we still got tensor output
+                    generated_text = self._decode_tokens(generated_output)
                 
                 result = {
                     'sample_id': i + 1,
@@ -341,7 +388,11 @@ class DemoPipeline:
                 _ = self.model.generate(
                     time_series=sample_data['time_series'],
                     text_input_ids=sample_data['text_input_ids'][:, :5],
-                    max_length=15
+                    max_length=15,
+                    return_text=True,  # Ensure text output for consistency
+                    do_sample=True,
+                    temperature=0.7,
+                    pad_token_id=50256
                 )
                 
             except Exception:

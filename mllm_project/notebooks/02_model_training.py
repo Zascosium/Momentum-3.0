@@ -549,19 +549,19 @@ try:
     
     # Generate text
     with torch.no_grad():
-        generated = model.generate(
+        generated_text = model.generate(
             time_series=sample_ts,
             ts_attention_mask=sample_ts_mask,
             text_input_ids=prompt_tokens,
             max_length=prompt_tokens.shape[1] + 50,
             temperature=0.8,
             do_sample=True,
-            top_p=0.9
+            top_p=0.9,
+            return_text=True  # Get decoded text directly
         )
     
-    # Decode generated text
-    generated_text = tokenizer.decode(generated[0], skip_special_tokens=True)
-    new_text = generated_text[len(prompt_text):].strip()
+    # Extract only the new generated text (removing the input prompt)
+    new_text = generated_text.strip()
     
     print(f"✨ Generated text: '{new_text}'")
     

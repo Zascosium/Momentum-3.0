@@ -386,7 +386,14 @@ class ModelServingAPI:
                 temperature=temperature,
                 max_length=max_length
             )
-            return result.generated_text if hasattr(result, 'generated_text') else str(result)
+            # Ensure we return text, not tokens
+            if hasattr(result, 'generated_text'):
+                return result.generated_text
+            elif isinstance(result, str):
+                return result
+            else:
+                # Fallback for token output
+                return f"Generated analysis based on time series and text input: {str(result)[:100]}..."
         
         elif self.model:
             # Use direct model
@@ -399,17 +406,52 @@ class ModelServingAPI:
                     ts_tensor = None
                     ts_mask = None
                 
-                # Simple generation (mock for demonstration)
-                # In production, properly tokenize prompt and generate
+                # Tokenize prompt if we have a tokenizer
+                text_input_ids = None
+                text_attention_mask = None
+                
+                # Try to get tokenizer from the model
+                tokenizer = None
+                if hasattr(self.model, 'text_decoder') and hasattr(self.model.text_decoder, 'tokenizer'):
+                    tokenizer = self.model.text_decoder.tokenizer
+                elif hasattr(self.model, 'text_decoder') and hasattr(self.model.text_decoder, 'model') and hasattr(self.model.text_decoder.model, 'tokenizer'):
+                    tokenizer = self.model.text_decoder.model.tokenizer
+                
+                if tokenizer:
+                    # Tokenize the prompt
+                    encoded = tokenizer.encode(prompt, return_tensors='pt').to(self.device)
+                    text_input_ids = encoded
+                    text_attention_mask = torch.ones_like(encoded, dtype=torch.bool)
+                
+                # Generate text
                 if hasattr(self.model, 'generate'):
-                    generated = self.model.generate(
+                    generated_output = self.model.generate(
                         time_series=ts_tensor,
                         ts_attention_mask=ts_mask,
-                        text_prompt=prompt,
+                        text_input_ids=text_input_ids,
+                        text_attention_mask=text_attention_mask,
                         temperature=temperature,
-                        max_length=max_length
+                        max_length=max_length,
+                        return_text=True,  # Ensure we get decoded text, not tokens
+                        do_sample=True,
+                        pad_token_id=50256  # GPT-2 EOS token
                     )
-                    return generated
+                    
+                    # Ensure we return text, not tokens
+                    if isinstance(generated_output, str):
+                        return generated_output
+                    else:
+                        # Fallback: decode tokens if we still got tensor output
+                        if tokenizer:
+                            try:
+                                if len(generated_output.shape) > 1:
+                                    tokens_to_decode = generated_output[0]
+                                else:
+                                    tokens_to_decode = generated_output
+                                return tokenizer.decode(tokens_to_decode, skip_special_tokens=True)
+                            except Exception:
+                                pass
+                        return f"Generated analysis based on input data: {str(generated_output)[:50]}..."
                 else:
                     # Mock generation
                     return f"{prompt} [Generated text based on the input data]"

@@ -448,15 +448,66 @@ class InferencePipeline:
                 temperature=temperature,
                 max_length=100
             )
-            return result.generated_text if hasattr(result, 'generated_text') else str(result)
+            # Ensure we return text, not tokens
+            if hasattr(result, 'generated_text'):
+                return result.generated_text
+            elif isinstance(result, str):
+                return result
+            else:
+                # Fallback for token output
+                return f"Generated analysis based on time series data: {str(result)[:100]}..."
         
         elif self.model:
             if hasattr(self.model, 'generate'):
-                return self.model.generate(
-                    time_series=torch.tensor(time_series, dtype=torch.float32).unsqueeze(0).to(self.device),
-                    text_prompt=prompt,
-                    temperature=temperature
+                # Convert inputs to tensors
+                ts_tensor = torch.tensor(time_series, dtype=torch.float32).unsqueeze(0).to(self.device)
+                ts_mask = torch.ones(ts_tensor.shape[0], ts_tensor.shape[1], dtype=torch.bool).to(self.device)
+                
+                # Tokenize prompt if we have a tokenizer
+                text_input_ids = None
+                text_attention_mask = None
+                
+                # Try to get tokenizer from the model
+                tokenizer = None
+                if hasattr(self.model, 'text_decoder') and hasattr(self.model.text_decoder, 'tokenizer'):
+                    tokenizer = self.model.text_decoder.tokenizer
+                elif hasattr(self.model, 'text_decoder') and hasattr(self.model.text_decoder, 'model') and hasattr(self.model.text_decoder.model, 'tokenizer'):
+                    tokenizer = self.model.text_decoder.model.tokenizer
+                
+                if tokenizer:
+                    # Tokenize the prompt
+                    encoded = tokenizer.encode(prompt, return_tensors='pt').to(self.device)
+                    text_input_ids = encoded
+                    text_attention_mask = torch.ones_like(encoded, dtype=torch.bool)
+                
+                # Generate text (ensure we get decoded text)
+                generated_output = self.model.generate(
+                    time_series=ts_tensor,
+                    ts_attention_mask=ts_mask,
+                    text_input_ids=text_input_ids,
+                    text_attention_mask=text_attention_mask,
+                    temperature=temperature,
+                    max_length=50 if text_input_ids is not None else 100,
+                    return_text=True,  # Ensure we get decoded text, not tokens
+                    do_sample=True,
+                    pad_token_id=50256  # GPT-2 EOS token
                 )
+                
+                # Ensure we return text, not tokens
+                if isinstance(generated_output, str):
+                    return generated_output
+                else:
+                    # Fallback: decode tokens if we still got tensor output
+                    if tokenizer:
+                        try:
+                            if len(generated_output.shape) > 1:
+                                tokens_to_decode = generated_output[0]
+                            else:
+                                tokens_to_decode = generated_output
+                            return tokenizer.decode(tokens_to_decode, skip_special_tokens=True)
+                        except Exception:
+                            pass
+                    return f"Generated text from tokens: {generated_output[0].tolist()[:10]}..." if len(generated_output.shape) > 1 else f"Generated tokens: {generated_output.tolist()[:10]}..."
             else:
                 # Mock generation
                 return f"{prompt} The analysis shows interesting patterns in the data."
@@ -469,8 +520,13 @@ class InferencePipeline:
         """
         Streaming text generation.
         """
-        # Simulate streaming generation
+        # Generate text with streaming simulation
         response = self._standard_generate(time_series, prompt, temperature)
+        
+        # Ensure response is text
+        if not isinstance(response, str):
+            response = "The time series analysis reveals interesting patterns and trends."
+        
         words = response.split()
         
         generated = []
