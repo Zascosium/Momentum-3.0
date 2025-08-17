@@ -58,11 +58,26 @@ except ImportError:
 # Import project modules with fallbacks
 try:
     from models.multimodal_model import MultimodalLLM
-except ImportError:
+except (ImportError, ValueError):
     try:
         from ..models.multimodal_model import MultimodalLLM
-    except ImportError:
-        MultimodalLLM = None
+    except (ImportError, ValueError):
+        try:
+            # Direct import for Databricks
+            import importlib.util
+            model_path = parent_dir / "models" / "multimodal_model.py"
+            if model_path.exists():
+                spec = importlib.util.spec_from_file_location("multimodal_model", model_path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    MultimodalLLM = module.MultimodalLLM
+                else:
+                    MultimodalLLM = None
+            else:
+                MultimodalLLM = None
+        except Exception:
+            MultimodalLLM = None
 
 try:
     from utils.inference_utils import create_inference_pipeline

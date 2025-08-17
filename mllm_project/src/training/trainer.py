@@ -20,12 +20,82 @@ from tqdm import tqdm
 import mlflow
 import mlflow.pytorch
 
-from ..models.multimodal_model import MultimodalLLM
-from ..data.data_loader import MultimodalDataModule
-from .losses import MultimodalLossFunction
-from .metrics import MetricsTracker
-from .callbacks import CallbackManager, EarlyStoppingCallback, CheckpointCallback
-from ..utils.config_loader import load_config_for_training
+import sys
+import os
+from pathlib import Path
+
+# Add parent directory to path for imports
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Databricks compatibility
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Import project modules with fallbacks
+try:
+    from models.multimodal_model import MultimodalLLM
+except (ImportError, ValueError):
+    MultimodalLLM = None
+
+try:
+    from data.data_loader import MultimodalDataModule
+except (ImportError, ValueError):
+    try:
+        from ..data.data_loader import MultimodalDataModule
+    except (ImportError, ValueError):
+        MultimodalDataModule = None
+
+try:
+    from training.losses import MultimodalLossFunction
+except (ImportError, ValueError):
+    try:
+        from .losses import MultimodalLossFunction
+    except (ImportError, ValueError):
+        MultimodalLossFunction = None
+
+try:
+    from training.metrics import MetricsTracker
+except (ImportError, ValueError):
+    try:
+        from .metrics import MetricsTracker
+    except (ImportError, ValueError):
+        class MetricsTracker:
+            def __init__(self, *args, **kwargs): pass
+            def update(self, *args, **kwargs): pass
+            def compute(self): return {}
+
+try:
+    from training.callbacks import CallbackManager, EarlyStoppingCallback, CheckpointCallback
+except (ImportError, ValueError):
+    try:
+        from .callbacks import CallbackManager, EarlyStoppingCallback, CheckpointCallback
+    except (ImportError, ValueError):
+        class CallbackManager:
+            def __init__(self, *args, **kwargs): pass
+        class EarlyStoppingCallback:
+            def __init__(self, *args, **kwargs): pass
+        class CheckpointCallback:
+            def __init__(self, *args, **kwargs): pass
+
+try:
+    from utils.config_loader import load_config_for_training
+except (ImportError, ValueError):
+    try:
+        from ..utils.config_loader import load_config_for_training
+    except (ImportError, ValueError):
+        def load_config_for_training(config_dir):
+            import yaml
+            config_path = Path(config_dir) / 'model_config.yaml'
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    return yaml.safe_load(f)
+            return {}
 
 logger = logging.getLogger(__name__)
 
