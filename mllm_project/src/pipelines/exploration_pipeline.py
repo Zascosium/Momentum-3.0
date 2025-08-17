@@ -18,8 +18,7 @@ import warnings
 warnings.filterwarnings('ignore')
 import sys
 
-sys.path.append(str(Path(__file__).parent / 'data'))
-sys.path.append(str(Path(__file__).parent / 'utils'))
+sys.path.append(str(Path(__file__).parent.parent))
 from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
 from utils.visualization import TrainingVisualizer
 from utils.config_loader import load_config_for_training

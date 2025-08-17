@@ -9,11 +9,30 @@ This package contains pipeline implementations for different stages:
 - Pipeline orchestration
 """
 
-from .exploration_pipeline import DataExplorationPipeline
-from .training_pipeline import TrainingPipeline
-from .evaluation_pipeline import EvaluationPipeline
-from .inference_pipeline import InferencePipeline
-from .orchestrator import PipelineOrchestrator
+try:
+    from .exploration_pipeline import DataExplorationPipeline
+except ImportError:
+    DataExplorationPipeline = None
+
+try:
+    from .training_pipeline import TrainingPipeline
+except ImportError:
+    TrainingPipeline = None
+
+try:
+    from .evaluation_pipeline import EvaluationPipeline
+except ImportError:
+    EvaluationPipeline = None
+
+try:
+    from .inference_pipeline import InferencePipeline
+except ImportError:
+    InferencePipeline = None
+
+try:
+    from .orchestrator import PipelineOrchestrator
+except ImportError:
+    PipelineOrchestrator = None
 
 __all__ = [
     'DataExplorationPipeline',

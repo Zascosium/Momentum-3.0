@@ -37,15 +37,65 @@ import yaml
 # Add project source to path
 sys.path.append(str(Path(__file__).parent / 'src'))
 
-# Import pipeline modules
-from src.pipelines.exploration_pipeline import DataExplorationPipeline
-from src.pipelines.training_pipeline import TrainingPipeline
-from src.pipelines.evaluation_pipeline import EvaluationPipeline
-from src.pipelines.inference_pipeline import InferencePipeline
-from src.pipelines.orchestrator import PipelineOrchestrator
-from src.pipelines.serving import ModelServingAPI
-from src.utils.cli_utils import setup_logging, print_banner, validate_paths
-from src.utils.config_loader import load_config_for_training
+# Import pipeline modules with error handling
+try:
+    from src.pipelines.exploration_pipeline import DataExplorationPipeline
+except ImportError as e:
+    DataExplorationPipeline = None
+    logging.warning(f"Could not import DataExplorationPipeline: {e}")
+
+try:
+    from src.pipelines.training_pipeline import TrainingPipeline
+except ImportError as e:
+    TrainingPipeline = None
+    logging.warning(f"Could not import TrainingPipeline: {e}")
+
+try:
+    from src.pipelines.evaluation_pipeline import EvaluationPipeline
+except ImportError as e:
+    EvaluationPipeline = None
+    logging.warning(f"Could not import EvaluationPipeline: {e}")
+
+try:
+    from src.pipelines.inference_pipeline import InferencePipeline
+except ImportError as e:
+    InferencePipeline = None
+    logging.warning(f"Could not import InferencePipeline: {e}")
+
+try:
+    from src.pipelines.orchestrator import PipelineOrchestrator
+except ImportError as e:
+    PipelineOrchestrator = None
+    logging.warning(f"Could not import PipelineOrchestrator: {e}")
+
+try:
+    from src.pipelines.serving import ModelServingAPI
+except ImportError as e:
+    ModelServingAPI = None
+    logging.warning(f"Could not import ModelServingAPI: {e}")
+
+try:
+    from src.utils.cli_utils import setup_logging, print_banner, validate_paths
+except ImportError as e:
+    # Provide fallback implementations
+    def setup_logging(level=logging.INFO, log_file=None):
+        logging.basicConfig(level=level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    def print_banner():
+        print("🚀 Multimodal LLM Pipeline CLI")
+    def validate_paths(*args, **kwargs):
+        return True
+
+try:
+    from src.utils.config_loader import load_config_for_training
+except ImportError as e:
+    def load_config_for_training(config_dir):
+        import yaml
+        from pathlib import Path
+        config_path = Path(config_dir) / 'model_config.yaml'
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                return yaml.safe_load(f)
+        return {}
 
 
 # Configure logging
@@ -106,15 +156,19 @@ def explore(ctx, data_dir, config_dir, output_dir, cache_dir,
     """
     logger.info("Starting data exploration pipeline...")
     
+    if DataExplorationPipeline is None:
+        click.echo(click.style("❌ DataExplorationPipeline not available. Missing dependencies.", fg='red'))
+        raise click.Abort()
+    
     try:
         # Load configuration
         config = load_config_for_training(config_dir)
         
         # Update config with CLI options
         if data_dir:
-            config['data']['data_dir'] = data_dir
+            config.setdefault('data', {})['data_dir'] = data_dir
         if domains:
-            config['domains']['included'] = list(domains)
+            config.setdefault('domains', {})['included'] = list(domains)
         
         # Initialize exploration pipeline
         pipeline = DataExplorationPipeline(
@@ -182,23 +236,28 @@ def train(ctx, config_dir, data_dir, checkpoint_dir, experiment_name,
     """
     logger.info("Starting training pipeline...")
     
+    if TrainingPipeline is None:
+        click.echo(click.style("❌ TrainingPipeline not available. Missing dependencies (likely mlflow).", fg='red'))
+        click.echo("Install missing dependencies: pip install mlflow")
+        raise click.Abort()
+    
     try:
         # Load configuration
         config = load_config_for_training(config_dir)
         
         # Update config with CLI options
         if data_dir:
-            config['data']['data_dir'] = data_dir
+            config.setdefault('data', {})['data_dir'] = data_dir
         if epochs:
-            config['training']['epochs'] = epochs
+            config.setdefault('training', {})['epochs'] = epochs
         if batch_size:
-            config['training']['batch_size'] = batch_size
+            config.setdefault('training', {})['batch_size'] = batch_size
         if learning_rate:
-            config['optimizer']['learning_rate'] = learning_rate
+            config.setdefault('optimizer', {})['learning_rate'] = learning_rate
         if distributed:
-            config['training']['distributed'] = True
+            config.setdefault('training', {})['distributed'] = True
         if mixed_precision:
-            config['mixed_precision']['enabled'] = True
+            config.setdefault('mixed_precision', {})['enabled'] = True
         
         # Initialize training pipeline
         pipeline = TrainingPipeline(
@@ -267,15 +326,19 @@ def evaluate(ctx, model_path, config_dir, data_dir, output_dir,
     """
     logger.info("Starting evaluation pipeline...")
     
+    if EvaluationPipeline is None:
+        click.echo(click.style("❌ EvaluationPipeline not available. Missing dependencies.", fg='red'))
+        raise click.Abort()
+    
     try:
         # Load configuration
         config = load_config_for_training(config_dir)
         
         # Update config with CLI options
         if data_dir:
-            config['data']['data_dir'] = data_dir
+            config.setdefault('data', {})['data_dir'] = data_dir
         if batch_size:
-            config['evaluation']['batch_size'] = batch_size
+            config.setdefault('evaluation', {})['batch_size'] = batch_size
         
         # Initialize evaluation pipeline
         pipeline = EvaluationPipeline(
@@ -343,6 +406,10 @@ def demo(ctx, model_path, config_dir, demo_dir, interactive,
     - Performance benchmarking
     """
     logger.info("Starting inference demo...")
+    
+    if InferencePipeline is None:
+        click.echo(click.style("❌ InferencePipeline not available. Missing dependencies.", fg='red'))
+        raise click.Abort()
     
     try:
         # Load configuration
@@ -431,6 +498,11 @@ def pipeline(ctx, config, stages, skip_stages, output_dir, resume, dry_run):
     """
     logger.info("Starting end-to-end pipeline...")
     
+    if PipelineOrchestrator is None:
+        click.echo(click.style("❌ PipelineOrchestrator not available. Missing dependencies (likely mlflow).", fg='red'))
+        click.echo("Install missing dependencies: pip install mlflow")
+        raise click.Abort()
+    
     try:
         # Load pipeline configuration
         with open(config, 'r') as f:
@@ -512,6 +584,11 @@ def serve(ctx, model_path, config_dir, host, port, workers,
     - OpenAPI documentation
     """
     logger.info(f"Starting model serving API on {host}:{port}...")
+    
+    if ModelServingAPI is None:
+        click.echo(click.style("❌ ModelServingAPI not available. Missing dependencies.", fg='red'))
+        click.echo("Install missing dependencies: pip install fastapi uvicorn")
+        raise click.Abort()
     
     try:
         # Load configuration
