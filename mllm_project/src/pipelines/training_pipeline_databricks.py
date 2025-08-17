@@ -153,6 +153,54 @@ class TrainingPipeline:
         print(f"   Checkpoint dir: {self.checkpoint_dir}")
         print(f"   Experiment: {experiment_name}")
     
+    def _create_training_dataloader(self):
+        """Create a training dataloader with synthetic data for testing."""
+        import torch
+        from torch.utils.data import DataLoader
+        
+        # Generate synthetic training data
+        batch_size = self.config.get('training', {}).get('batch_size', 16)
+        num_samples = 100
+        ts_seq_len = self.config.get('time_series', {}).get('max_length', 100)
+        text_seq_len = self.config.get('text', {}).get('tokenizer', {}).get('max_length', 50)
+        n_features = 3
+        vocab_size = 50257
+        
+        # Create synthetic data
+        train_ts = torch.randn(num_samples, ts_seq_len, n_features)
+        train_text = torch.randint(0, vocab_size, (num_samples, text_seq_len))
+        
+        # Create a custom dataset that returns dictionary batches
+        class DictDataset:
+            def __init__(self, time_series, text_ids, ts_seq_len, text_seq_len):
+                self.time_series = time_series
+                self.text_ids = text_ids
+                self.ts_seq_len = ts_seq_len
+                self.text_seq_len = text_seq_len
+            
+            def __len__(self):
+                return len(self.time_series)
+            
+            def __getitem__(self, idx):
+                return {
+                    'time_series': self.time_series[idx],
+                    'ts_attention_mask': torch.ones(self.ts_seq_len, dtype=torch.bool),
+                    'text_input_ids': self.text_ids[idx],
+                    'text_attention_mask': torch.ones(self.text_seq_len, dtype=torch.bool)
+                }
+        
+        train_dataset = DictDataset(train_ts, train_text, ts_seq_len, text_seq_len)
+        
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=0
+        )
+        
+        print(f"Created training dataloader with {len(train_dataset)} samples, batch size {batch_size}")
+        return train_dataloader
+    
     def run(self, resume_from: Optional[str] = None, verbose: bool = False):
         """
         Run the complete training pipeline.
@@ -185,47 +233,9 @@ class TrainingPipeline:
             # Initialize trainer  
             print("🏃 Initializing trainer...")
             
-            # Create a simple mock dataloader for training
-            import torch
-            from torch.utils.data import DataLoader, TensorDataset
-            
-            # Generate synthetic training data
-            batch_size = self.config.get('training', {}).get('batch_size', 16)
-            num_samples = 100
-            ts_seq_len = self.config.get('time_series', {}).get('max_length', 100)
-            text_seq_len = self.config.get('text', {}).get('tokenizer', {}).get('max_length', 50)
-            n_features = 3
-            vocab_size = 50257
-            
-            # Create synthetic data
-            train_ts = torch.randn(num_samples, ts_seq_len, n_features)
-            train_text = torch.randint(0, vocab_size, (num_samples, text_seq_len))
-            
-            # Create a custom dataset that returns dictionary batches
-            class DictDataset:
-                def __init__(self, time_series, text_ids):
-                    self.time_series = time_series
-                    self.text_ids = text_ids
-                
-                def __len__(self):
-                    return len(self.time_series)
-                
-                def __getitem__(self, idx):
-                    return {
-                        'time_series': self.time_series[idx],
-                        'ts_attention_mask': torch.ones(ts_seq_len, dtype=torch.bool),
-                        'text_input_ids': self.text_ids[idx],
-                        'text_attention_mask': torch.ones(text_seq_len, dtype=torch.bool)
-                    }
-            
-            train_dataset = DictDataset(train_ts, train_text)
-            
-            train_dataloader = DataLoader(
-                train_dataset,
-                batch_size=batch_size,
-                shuffle=True,
-                num_workers=0
-            )
+            # Create dataloader for training
+            train_dataloader = self._create_training_dataloader()
+            print("✅ Training dataloader created")
             
             self.trainer = MultimodalTrainer(
                 model=self.model,
