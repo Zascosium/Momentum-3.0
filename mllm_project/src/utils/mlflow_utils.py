@@ -49,12 +49,20 @@ class MLflowExperimentManager:
         self.artifact_location = artifact_location
         self.default_tags = tags or {}
         
+        # Check if MLflow is available
+        if mlflow is None:
+            raise ImportError("MLflow not available - install mlflow package")
+        
         # Set tracking URI
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
         
         # Initialize client
-        self.client = MlflowClient()
+        if MlflowClient is not None:
+            self.client = MlflowClient()
+        else:
+            self.client = None
+            logger.warning("MlflowClient not available - some features disabled")
         
         # Create or get experiment
         self.experiment_id = self._setup_experiment()

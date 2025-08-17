@@ -5,12 +5,23 @@ Handles loading, validation, and merging of configuration files.
 
 import os
 import yaml
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Tuple
 from pathlib import Path
 import logging
 from dataclasses import dataclass, field
 from omegaconf import OmegaConf, DictConfig
 import json
+
+# Import our config validator
+try:
+    from .config_validator import ConfigValidator, validate_and_fix_config
+except ImportError:
+    try:
+        from config_validator import ConfigValidator, validate_and_fix_config
+    except ImportError:
+        ConfigValidator = None
+        validate_and_fix_config = None
+        logger.warning("ConfigValidator not available - advanced validation disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -152,18 +163,58 @@ class ConfigLoader:
         
         return resolved_content
     
-    def validate_config(self, config: DictConfig, schema: Optional[Dict] = None) -> bool:
+    def validate_config(self, config: DictConfig, schema: Optional[Dict] = None, 
+                       databricks: bool = False) -> Tuple[bool, list]:
         """
-        Validate configuration against a schema.
+        Validate configuration against a schema with comprehensive validation.
         
         Args:
             config: Configuration to validate
             schema: Optional schema for validation
+            databricks: Whether to validate for Databricks environment
             
         Returns:
-            True if validation passes
+            Tuple of (is_valid, list_of_errors)
         """
-        # Basic validation - check for required fields
+        errors = []
+        
+        try:
+            # Convert OmegaConf to dict for validation
+            config_dict = OmegaConf.to_container(config, resolve=True)
+            
+            # Use advanced validator if available
+            if ConfigValidator is not None:
+                validator = ConfigValidator()
+                is_valid, validation_errors = validator.validate_complete_config(config_dict)
+                errors.extend(validation_errors)
+                
+                # Additional Databricks validation
+                if databricks:
+                    db_valid, db_warnings = validator.validate_databricks_config(config_dict)
+                    errors.extend(db_warnings)
+                    is_valid = is_valid and db_valid
+            else:
+                # Fallback to basic validation
+                is_valid = self._basic_validation(config_dict)
+                if not is_valid:
+                    errors.append("Basic validation failed")
+            
+        except Exception as e:
+            errors.append(f"Validation failed with exception: {e}")
+            is_valid = False
+        
+        # Log validation results
+        if not is_valid:
+            logger.error(f"Configuration validation failed with {len(errors)} errors")
+            for error in errors:
+                logger.error(f"  - {error}")
+        else:
+            logger.info("Configuration validation passed")
+        
+        return is_valid, errors
+    
+    def _basic_validation(self, config: Dict[str, Any]) -> bool:
+        """Basic validation fallback when advanced validator is not available."""
         required_fields = {
             'training_config': ['training', 'optimizer', 'scheduler'],
             'model_config': ['model', 'time_series_encoder', 'text_decoder'],
@@ -176,7 +227,6 @@ class ConfigLoader:
                 if field not in config:
                     raise ConfigurationError(f"Missing required field '{field}' in {config_type}")
         
-        # Additional custom validation can be added here
         return True
     
     def _detect_config_type(self, config: DictConfig) -> str:
@@ -260,6 +310,17 @@ class ConfigLoader:
                 
                 # Set nested key
                 OmegaConf.set(config, config_key, value)
+        
+        # Validate the updated config
+        try:
+            if ConfigValidator is not None:
+                config_dict = OmegaConf.to_container(config, resolve=True)
+                validator = ConfigValidator()
+                is_valid, errors = validator.validate_complete_config(config_dict)
+                if not is_valid:
+                    logger.warning(f"Environment variable updates caused validation issues: {errors}")
+        except Exception as e:
+            logger.warning(f"Could not validate config after environment updates: {e}")
         
         return config
 

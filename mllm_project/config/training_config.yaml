@@ -39,9 +39,9 @@ scheduler:
 mixed_precision:
   enabled: true
   fp16: false
-  bf16: true  # Better for stability
-  loss_scale: 0  # Dynamic scaling
-  init_scale: 65536
+  bf16: true  # Better for stability on modern hardware
+  loss_scale: 0  # Dynamic scaling (only used with fp16)
+  init_scale: 65536  # Initial scale for fp16
 
 # Distributed Training
 distributed:
@@ -56,8 +56,9 @@ checkpointing:
   monitor: "val_loss"
   mode: "min"
   save_last: true
-  dirpath: "/dbfs/mllm/checkpoints"
+  dirpath: "${CHECKPOINT_DIR:/dbfs/FileStore/mllm/checkpoints}"  # Use env var with fallback
   filename: "epoch_{epoch:02d}-val_loss_{val_loss:.2f}"
+  auto_insert_metric_name: false  # Prevent duplicate metric names
 
 # Validation
 validation:
@@ -83,3 +84,10 @@ memory:
   non_blocking: true
   persistent_workers: true
   prefetch_factor: 2
+  max_memory_usage: 0.8  # Use up to 80% of available memory
+  
+# Environment Settings
+environment:
+  auto_detect_databricks: true
+  setup_logging: true
+  validate_setup: true

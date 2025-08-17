@@ -85,9 +85,11 @@ except (ImportError, ValueError):
 
 try:
     from utils.config_loader import load_config_for_training
+    from utils.databricks_utils import get_databricks_environment, configure_for_databricks, setup_databricks_logging
 except (ImportError, ValueError):
     try:
         from ..utils.config_loader import load_config_for_training
+        from ..utils.databricks_utils import get_databricks_environment, configure_for_databricks, setup_databricks_logging
     except (ImportError, ValueError):
         def load_config_for_training(config_dir):
             import yaml
@@ -96,6 +98,15 @@ except (ImportError, ValueError):
                 with open(config_path, 'r') as f:
                     return yaml.safe_load(f)
             return {}
+        
+        def get_databricks_environment():
+            class MockEnv:
+                def is_databricks(self): return False
+                def normalize_path(self, path, **kwargs): return str(path)
+            return MockEnv()
+        
+        def configure_for_databricks(config): return config
+        def setup_databricks_logging(): pass
 
 logger = logging.getLogger(__name__)
 
@@ -165,11 +176,33 @@ class MultimodalTrainer:
         self.optimizer = optimizer or self._create_optimizer()
         self.scheduler = scheduler or self._create_scheduler()
         
-        # Mixed precision
+        # Mixed precision - fix configuration conflicts
         self.use_amp = self.mixed_precision_config.get('enabled', True)
-        self.scaler = torch.cuda.amp.GradScaler(
-            enabled=self.use_amp and self.mixed_precision_config.get('fp16', False)
-        )
+        fp16_enabled = self.mixed_precision_config.get('fp16', False)
+        bf16_enabled = self.mixed_precision_config.get('bf16', False)
+        
+        # Resolve conflicts between fp16 and bf16
+        if fp16_enabled and bf16_enabled:
+            logger.warning("Both fp16 and bf16 enabled - preferring bf16 for stability")
+            fp16_enabled = False
+            self.mixed_precision_config['fp16'] = False
+        
+        # Only use GradScaler with fp16 (bf16 doesn't need scaling)
+        try:
+            # Use new API if available
+            self.scaler = torch.amp.GradScaler(
+                device='cuda' if torch.cuda.is_available() else 'cpu',
+                enabled=self.use_amp and fp16_enabled
+            )
+        except (AttributeError, TypeError):
+            # Fallback to deprecated API
+            self.scaler = torch.cuda.amp.GradScaler(
+                enabled=self.use_amp and fp16_enabled
+            )
+        
+        # Store the resolved precision mode
+        self.precision_mode = 'bf16' if bf16_enabled else ('fp16' if fp16_enabled else 'fp32')
+        logger.info(f"Mixed precision mode: {self.precision_mode}")
         
         # Loss function and metrics
         self.loss_fn = MultimodalLossFunction(config.get('loss', {}))
@@ -394,9 +427,20 @@ class MultimodalTrainer:
         # Create labels for language modeling (shift input_ids)
         labels = text_input_ids.clone()
         
-        # Mixed precision forward pass
+        # Mixed precision forward pass with proper dtype handling
         if self.use_amp:
-            with torch.cuda.amp.autocast(enabled=self.mixed_precision_config.get('fp16', False)):
+            # Use the appropriate autocast dtype
+            autocast_dtype = torch.bfloat16 if self.precision_mode == 'bf16' else torch.float16
+            device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
+            
+            try:
+                # Use new API if available
+                autocast_context = torch.amp.autocast(device_type=device_type, dtype=autocast_dtype)
+            except (AttributeError, TypeError):
+                # Fallback to deprecated API
+                autocast_context = torch.cuda.amp.autocast(dtype=autocast_dtype)
+            
+            with autocast_context:
                 outputs = self.model(
                     time_series=time_series,
                     ts_attention_mask=ts_attention_mask,
@@ -415,21 +459,25 @@ class MultimodalTrainer:
             )
             loss = outputs.loss / self.gradient_accumulation_steps
         
-        # Backward pass
-        if self.use_amp:
+        # Backward pass with proper scaling
+        if self.use_amp and self.precision_mode == 'fp16':
+            # Only use scaler for fp16
             self.scaler.scale(loss).backward()
         else:
+            # bf16 and fp32 don't need scaling
             loss.backward()
         
         # Gradient accumulation
         if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
             # Gradient clipping
-            if self.use_amp:
+            if self.use_amp and self.precision_mode == 'fp16':
+                # fp16 with scaler
                 self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
+                # bf16 or fp32 without scaler
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.optimizer.step()
             
@@ -465,9 +513,19 @@ class MultimodalTrainer:
                 text_attention_mask = batch.get('text_attention_mask')
                 labels = text_input_ids.clone()
                 
-                # Forward pass
+                # Forward pass with consistent autocast
                 if self.use_amp:
-                    with torch.cuda.amp.autocast(enabled=self.mixed_precision_config.get('fp16', False)):
+                    autocast_dtype = torch.bfloat16 if self.precision_mode == 'bf16' else torch.float16
+                    device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
+                    
+                    try:
+                        # Use new API if available
+                        autocast_context = torch.amp.autocast(device_type=device_type, dtype=autocast_dtype)
+                    except (AttributeError, TypeError):
+                        # Fallback to deprecated API
+                        autocast_context = torch.cuda.amp.autocast(dtype=autocast_dtype)
+                    
+                    with autocast_context:
                         outputs = self.model(
                             time_series=time_series,
                             ts_attention_mask=ts_attention_mask,
@@ -645,12 +703,25 @@ class MultimodalTrainer:
             mlflow.log_metric(full_metric_name, metric_value, step=step)
     
     def _save_checkpoint(self, checkpoint_name: str) -> None:
-        """Save training checkpoint."""
+        """Save training checkpoint with Databricks path handling."""
         if not self.is_main_process:
             return
         
-        checkpoint_dir = Path(self.checkpointing_config.get('dirpath', '/dbfs/mllm/checkpoints'))
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        # Use Databricks environment to normalize paths
+        db_env = get_databricks_environment()
+        checkpoint_path_raw = self.checkpointing_config.get('dirpath', '/dbfs/FileStore/mllm/checkpoints')
+        checkpoint_path_normalized = db_env.normalize_path(checkpoint_path_raw, ensure_dbfs=True)
+        
+        checkpoint_dir = Path(checkpoint_path_normalized)
+        
+        try:
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create checkpoint directory {checkpoint_dir}: {e}")
+            # Fallback to local directory
+            checkpoint_dir = Path('./checkpoints')
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            logger.warning(f"Using fallback checkpoint directory: {checkpoint_dir}")
         
         checkpoint_path = checkpoint_dir / f"{checkpoint_name}.pt"
         
@@ -675,12 +746,25 @@ class MultimodalTrainer:
         logger.info(f"Checkpoint saved: {checkpoint_path}")
     
     def _save_final_model(self) -> None:
-        """Save final trained model."""
+        """Save final trained model with proper path handling."""
         if not self.is_main_process:
             return
         
-        save_dir = Path(self.checkpointing_config.get('dirpath', '/dbfs/mllm/checkpoints')) / 'final_model'
-        save_dir.mkdir(parents=True, exist_ok=True)
+        # Use Databricks environment for path normalization
+        db_env = get_databricks_environment()
+        base_dir = self.checkpointing_config.get('dirpath', '/dbfs/FileStore/mllm/checkpoints')
+        base_dir_normalized = db_env.normalize_path(base_dir, ensure_dbfs=True)
+        
+        save_dir = Path(base_dir_normalized) / 'final_model'
+        
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create model save directory {save_dir}: {e}")
+            # Fallback to local directory
+            save_dir = Path('./models/final_model')
+            save_dir.mkdir(parents=True, exist_ok=True)
+            logger.warning(f"Using fallback model save directory: {save_dir}")
         
         # Save model
         if hasattr(self.model, 'module'):
@@ -720,35 +804,54 @@ class MultimodalTrainer:
                     signature = None
                     logger.info("No logits found in prediction, signature will be None")
             
-            # Log model with signature and input example
-            mlflow.pytorch.log_model(
-                pytorch_model=model,
-                artifact_path="final_model",
-                signature=signature,
-                input_example=input_example,
-                pip_requirements=[
-                    f"torch=={torch.__version__}",
-                    "numpy",
-                    "transformers"
-                ]
-            )
+            # Log model with signature and input example - improved error handling
+            try:
+                mlflow.pytorch.log_model(
+                    pytorch_model=model,
+                    artifact_path="final_model",
+                    signature=signature,
+                    input_example=input_example,
+                    pip_requirements=[
+                        f"torch=={torch.__version__}",
+                        "numpy",
+                        "transformers",
+                        "scipy",
+                        "scikit-learn"
+                    ],
+                    extra_files=None,  # Avoid file conflicts
+                    await_registration_for=0  # Don't wait for model registration
+                )
+                logger.info("Model successfully logged to MLflow")
+            except Exception as mlflow_error:
+                logger.warning(f"MLflow model logging failed: {mlflow_error}")
+                # Continue without MLflow logging
+                pass
             
         except Exception as e:
             logger.warning(f"Could not create model signature: {e}")
             import traceback
             logger.warning(f"Signature creation error details: {traceback.format_exc()}")
             # Fallback to basic logging
-            mlflow.pytorch.log_model(
-                pytorch_model=model,
-                artifact_path="final_model",
-                pip_requirements=[
-                    f"torch=={torch.__version__}",
-                    "numpy", 
-                    "transformers"
-                ]
-            )
+            try:
+                mlflow.pytorch.log_model(
+                    pytorch_model=model,
+                    artifact_path="final_model",
+                    pip_requirements=[
+                        f"torch=={torch.__version__}",
+                        "numpy", 
+                        "transformers"
+                    ],
+                    await_registration_for=0
+                )
+                logger.info("Model logged to MLflow (basic mode)")
+            except Exception as final_error:
+                logger.error(f"All MLflow logging attempts failed: {final_error}")
+                # Save model locally as final fallback
+                local_model_path = save_dir / 'model_state.pt'
+                torch.save(model.state_dict(), local_model_path)
+                logger.info(f"Model state saved locally to {local_model_path}")
         
-        logger.info(f"Final model saved: {save_dir}")
+            logger.info(f"Final model saved: {save_dir}")
     
     def load_checkpoint(self, checkpoint_path: str) -> None:
         """Load training checkpoint."""
@@ -767,8 +870,8 @@ class MultimodalTrainer:
         if self.scheduler and checkpoint.get('scheduler_state_dict'):
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
-        # Load scaler state
-        if self.use_amp and checkpoint.get('scaler_state_dict'):
+        # Load scaler state (only for fp16)
+        if self.use_amp and self.precision_mode == 'fp16' and checkpoint.get('scaler_state_dict'):
             self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
         
         # Load training state
@@ -784,7 +887,8 @@ def create_trainer(
     config_path: str,
     model_class: type = MultimodalLLM,
     data_module_class: type = MultimodalDataModule,
-    resume_from_checkpoint: Optional[str] = None
+    resume_from_checkpoint: Optional[str] = None,
+    databricks_optimized: bool = True
 ) -> MultimodalTrainer:
     """
     Factory function to create a trainer with all components.
@@ -794,12 +898,27 @@ def create_trainer(
         model_class: Model class to instantiate
         data_module_class: Data module class to instantiate
         resume_from_checkpoint: Path to checkpoint to resume from
+        databricks_optimized: Whether to apply Databricks optimizations
         
     Returns:
         Configured trainer instance
     """
-    # Load configuration
-    config = load_config_for_training(config_path)
+    # Setup Databricks environment if needed
+    if databricks_optimized:
+        db_env = get_databricks_environment()
+        if db_env.is_databricks():
+            setup_databricks_logging()
+            logger.info("Databricks environment detected and configured")
+    
+    # Load configuration with Databricks support
+    config = load_config_for_training(
+        config_path, 
+        databricks=databricks_optimized
+    )
+    
+    # Apply Databricks optimizations if needed
+    if databricks_optimized:
+        config = configure_for_databricks(config)
     
     # Create model
     model = model_class(config)
