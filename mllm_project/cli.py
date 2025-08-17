@@ -35,14 +35,59 @@ import json
 import yaml
 
 # Add project source to path
-sys.path.append(str(Path(__file__).parent / 'src'))
+project_root = Path(__file__).parent
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+sys.path.insert(0, str(project_root))
+
+# Databricks compatibility: also try common Databricks paths
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    # Common Databricks paths
+    databricks_paths = [
+        '/databricks/driver',
+        '/databricks/driver/src',
+        '/Workspace/Repos',
+        '/Workspace'
+    ]
+    for db_path in databricks_paths:
+        if os.path.exists(db_path):
+            sys.path.insert(0, db_path)
 
 # Import pipeline modules with error handling
 try:
     from src.pipelines.exploration_pipeline import DataExplorationPipeline
 except ImportError as e:
     DataExplorationPipeline = None
-    logging.warning(f"Could not import DataExplorationPipeline: {e}")
+    error_msg = f"Could not import DataExplorationPipeline: {e}"
+    if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+        error_msg += f"\nDatabricks detected. Current sys.path: {sys.path[:3]}..."
+        error_msg += f"\nWorking directory: {os.getcwd()}"
+        error_msg += f"\nProject root exists: {project_root.exists()}"
+        error_msg += f"\nSrc path exists: {src_path.exists()}"
+    logging.warning(error_msg)
+    
+    # Try alternative import paths for Databricks
+    if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+        try:
+            # Try direct import without src prefix
+            from pipelines.exploration_pipeline import DataExplorationPipeline
+            logging.info("Successfully imported DataExplorationPipeline using alternative path")
+        except ImportError:
+            try:
+                # Try with absolute path
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "exploration_pipeline", 
+                    src_path / "pipelines" / "exploration_pipeline.py"
+                )
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    DataExplorationPipeline = module.DataExplorationPipeline
+                    logging.info("Successfully imported DataExplorationPipeline using direct file import")
+            except Exception as e2:
+                logging.warning(f"Alternative import methods also failed: {e2}")
+                DataExplorationPipeline = None
 
 try:
     from src.pipelines.training_pipeline import TrainingPipeline

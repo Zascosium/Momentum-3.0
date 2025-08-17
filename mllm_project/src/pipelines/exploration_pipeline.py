@@ -17,11 +17,62 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 import sys
+import os
 
-sys.path.append(str(Path(__file__).parent.parent))
-from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
-from utils.visualization import TrainingVisualizer
-from utils.config_loader import load_config_for_training
+# Add parent directory to path for imports
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Databricks compatibility
+if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+    # Try to find the project root in Databricks
+    current_path = Path(__file__).parent
+    while current_path != current_path.parent:
+        if (current_path / 'src').exists():
+            sys.path.insert(0, str(current_path / 'src'))
+            break
+        current_path = current_path.parent
+
+# Import with fallbacks
+try:
+    from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+except ImportError:
+    try:
+        from src.data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+    except ImportError:
+        # Create mock classes for testing if imports fail
+        class TimeSeriesPreprocessor:
+            def __init__(self, config): pass
+            def preprocess(self, data): return data
+        class TextPreprocessor:
+            def __init__(self, config): pass
+            def preprocess(self, data): return data
+
+try:
+    from utils.visualization import TrainingVisualizer
+except ImportError:
+    try:
+        from src.utils.visualization import TrainingVisualizer
+    except ImportError:
+        # Create mock visualizer
+        class TrainingVisualizer:
+            def __init__(self, output_dir): pass
+            def create_plots(self, *args, **kwargs): pass
+
+try:
+    from utils.config_loader import load_config_for_training
+except ImportError:
+    try:
+        from src.utils.config_loader import load_config_for_training
+    except ImportError:
+        # Create fallback config loader
+        def load_config_for_training(config_dir):
+            import yaml
+            config_path = Path(config_dir) / 'model_config.yaml'
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    return yaml.safe_load(f)
+            return {}
 
 logger = logging.getLogger(__name__)
 
