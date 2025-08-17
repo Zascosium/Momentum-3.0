@@ -54,14 +54,6 @@ def train(epochs, batch_size, mixed_precision, checkpoint_dir):
         config.setdefault('training', {})['batch_size'] = batch_size
         config.setdefault('mixed_precision', {})['enabled'] = mixed_precision
         
-        # Fix checkpoint directory for local/non-Databricks environments
-        if 'checkpointing' in config and config['checkpointing'].get('dirpath', '').startswith('/dbfs'):
-            config['checkpointing']['dirpath'] = checkpoint_dir
-        
-        # Disable time series reconstruction loss for testing with mock components
-        config.setdefault('loss', {})['time_series_reconstruction_weight'] = 0.0
-        config.setdefault('loss', {})['alignment_loss_weight'] = 0.0
-        
         # Import patched training pipeline
         import importlib.util
         pipeline_file = src_path / 'pipelines' / 'training_pipeline_databricks.py'
