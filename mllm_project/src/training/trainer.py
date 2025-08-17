@@ -690,8 +690,63 @@ class MultimodalTrainer:
         
         model.save_pretrained(str(save_dir))
         
-        # Log model to MLflow
-        mlflow.pytorch.log_model(model, "final_model")
+        # Log model to MLflow with proper signature and parameters
+        try:
+            import mlflow.pytorch
+            from mlflow.models.signature import infer_signature
+            
+            # Create a sample input for signature inference
+            sample_batch = next(iter(self.train_dataloader))
+            
+            # Create input example (first sample from batch)
+            input_example = {
+                'time_series': sample_batch['time_series'][:1],  # Take first sample
+                'ts_attention_mask': sample_batch['ts_attention_mask'][:1],
+                'text_input_ids': sample_batch['text_input_ids'][:1],
+                'text_attention_mask': sample_batch['text_attention_mask'][:1]
+            }
+            
+            # Infer signature from model prediction
+            model.eval()
+            with torch.no_grad():
+                prediction = model(**input_example)
+                # Convert to numpy for signature
+                if hasattr(prediction, 'logits'):
+                    input_dict = {k: v.numpy() for k, v in input_example.items()}
+                    output_array = prediction.logits.numpy()
+                    signature = infer_signature(input_dict, output_array)
+                    logger.info("Model signature created successfully")
+                else:
+                    signature = None
+                    logger.info("No logits found in prediction, signature will be None")
+            
+            # Log model with signature and input example
+            mlflow.pytorch.log_model(
+                pytorch_model=model,
+                artifact_path="final_model",
+                signature=signature,
+                input_example=input_example,
+                pip_requirements=[
+                    f"torch=={torch.__version__}",
+                    "numpy",
+                    "transformers"
+                ]
+            )
+            
+        except Exception as e:
+            logger.warning(f"Could not create model signature: {e}")
+            import traceback
+            logger.warning(f"Signature creation error details: {traceback.format_exc()}")
+            # Fallback to basic logging
+            mlflow.pytorch.log_model(
+                pytorch_model=model,
+                artifact_path="final_model",
+                pip_requirements=[
+                    f"torch=={torch.__version__}",
+                    "numpy", 
+                    "transformers"
+                ]
+            )
         
         logger.info(f"Final model saved: {save_dir}")
     

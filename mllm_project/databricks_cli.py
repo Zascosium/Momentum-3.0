@@ -92,5 +92,66 @@ def train(epochs, batch_size, mixed_precision, checkpoint_dir):
         traceback.print_exc()
         raise
 
+@cli.command()
+@click.option('--model-path', default='./checkpoints/final_model', help='Path to trained model')
+@click.option('--interactive', is_flag=True, help='Run interactive demo')
+@click.option('--batch-size', type=int, default=5, help='Number of samples for batch demo')
+@click.option('--performance-test', is_flag=True, help='Run performance test')
+@click.option('--iterations', type=int, default=10, help='Number of iterations for performance test')
+def demo(model_path, interactive, batch_size, performance_test, iterations):
+    """Run model demonstration - Databricks compatible"""
+    
+    print("🚀 Databricks Demo Started")
+    print(f"Model path: {model_path}")
+    
+    try:
+        # Load config
+        config_dir = project_root / 'config'
+        config = {}
+        
+        for config_file in ['model_config.yaml', 'data_config.yaml']:
+            config_path = config_dir / config_file
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        config.update(file_config)
+                print(f"✅ Loaded {config_file}")
+        
+        # Import patched demo pipeline
+        import importlib.util
+        pipeline_file = src_path / 'pipelines' / 'demo_pipeline_databricks.py'
+        
+        if pipeline_file.exists():
+            spec = importlib.util.spec_from_file_location("demo_pipeline_databricks", pipeline_file)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            DemoPipeline = module.DemoPipeline
+        else:
+            raise ImportError("Demo pipeline not found.")
+        
+        # Create demo pipeline
+        pipeline = DemoPipeline(
+            model_path=model_path,
+            config=config
+        )
+        
+        # Run appropriate demo mode
+        if interactive:
+            result = pipeline.run_interactive_demo()
+        elif performance_test:
+            result = pipeline.run_performance_test(num_iterations=iterations)
+        else:
+            result = pipeline.run_batch_demo(num_samples=batch_size)
+        
+        print("🎉 Demo completed successfully!")
+        print(f"Results: {result}")
+        
+    except Exception as e:
+        print(f"❌ Demo failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
 if __name__ == '__main__':
     cli()
