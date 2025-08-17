@@ -163,7 +163,16 @@ class TrainingPipeline:
             # Setup MLflow
             print("📊 Setting up MLflow...")
             if mlflow:
-                mlflow.set_experiment(self.experiment_name)
+                # Check if running on Databricks and format experiment name accordingly
+                import os
+                if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+                    # Use Databricks workspace path format
+                    experiment_name = f"/Users/{os.environ.get('USER', 'databricks')}/{self.experiment_name}"
+                else:
+                    # Use regular name for local environments
+                    experiment_name = self.experiment_name
+                
+                mlflow.set_experiment(experiment_name)
                 mlflow.start_run()
                 print("✅ MLflow experiment started")
             
