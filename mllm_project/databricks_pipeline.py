@@ -29,9 +29,8 @@ class DatabricksPipeline:
             logger.info(f"Project root detected: {self.project_root}")
             
             self.setup_paths()
-            self.config = self.load_config()
             
-            # Setup directories - ensure these are always set
+            # Setup directories BEFORE loading config - ensure these are always set
             self.checkpoint_dir = "/dbfs/mllm_checkpoints"
             self.output_dir = "/dbfs/mllm_outputs"
             self.data_dir = f"{self.project_root}/data/time_mmd"
@@ -39,6 +38,9 @@ class DatabricksPipeline:
             logger.info(f"Checkpoint directory: {self.checkpoint_dir}")
             logger.info(f"Output directory: {self.output_dir}")
             logger.info(f"Data directory: {self.data_dir}")
+            
+            # Now load config (which references the directories above)
+            self.config = self.load_config()
             
             self._ensure_directories()
             
