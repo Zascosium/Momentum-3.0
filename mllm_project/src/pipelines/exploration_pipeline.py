@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # Import with fallbacks for different execution contexts
 try:
     from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+    from data.time_mmd_loader import TimeMmdDatasetLoader
 except ImportError:
     try:
         # Try absolute import from src
@@ -48,10 +49,12 @@ except ImportError:
         if str(src_path) not in sys.path:
             sys.path.insert(0, str(src_path))
         from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+        from data.time_mmd_loader import TimeMmdDatasetLoader
     except ImportError:
         # Final fallback - try direct import
         try:
             import preprocessing
+            from time_mmd_loader import TimeMmdDatasetLoader
             TimeSeriesPreprocessor = preprocessing.TimeSeriesPreprocessor
             TextPreprocessor = preprocessing.TextPreprocessor
         except ImportError as e:
@@ -62,6 +65,9 @@ except ImportError:
                     pass
             class TextPreprocessor:
                 def __init__(self, config=None):
+                    pass
+            class TimeMmdDatasetLoader:
+                def __init__(self, *args, **kwargs):
                     pass
 # Import utilities with fallbacks
 try:
@@ -172,14 +178,79 @@ class DataExplorationPipeline:
         try:
             # Load real data from configured data source
             data_config = self.config.get('data', {})
-            data_path = data_config.get('data_dir', './data')
+            data_path = data_config.get('data_dir', './data/time_mmd')
             
             if not os.path.exists(data_path):
                 raise FileNotFoundError(f"Data directory not found: {data_path}")
             
-            # Load actual dataset
-            # This should be implemented based on your specific data format
-            raise NotImplementedError("Real data loading not implemented. Please implement data loading for your specific dataset format.")
+            # Get domains from config or use defaults
+            domains = self.config.get('domains', {}).get('included', ['Agriculture', 'Climate', 'Economy'])
+            
+            # Initialize dataset info
+            dataset_info = {
+                'total_samples': 0,
+                'domains': domains,
+                'domain_distribution': {},
+                'samples': []
+            }
+            
+            # Load data for each domain
+            for domain in domains:
+                try:
+                    logger.info(f"Loading Time-MMD data for domain: {domain}")
+                    
+                    # Create dataset loader
+                    dataset = TimeMmdDatasetLoader(
+                        data_dir=data_path,
+                        domain=domain,
+                        split='train',
+                        sequence_length=self.config.get('model', {}).get('sequence_length', 256),
+                        text_max_length=self.config.get('model', {}).get('text_max_length', 512),
+                        use_report_text=True,
+                        use_search_text=True
+                    )
+                    
+                    # Get dataset info
+                    info = dataset.get_dataset_info()
+                    dataset_info['domain_distribution'][domain] = info['num_samples']
+                    dataset_info['total_samples'] += info['num_samples']
+                    
+                    # Extract sample data for analysis (limit to sample_size per domain)
+                    domain_sample_size = min(sample_size // len(domains), len(dataset))
+                    for i in range(min(domain_sample_size, len(dataset))):
+                        sample = dataset[i]
+                        
+                        # Convert tensor to numpy for analysis
+                        numerical_data = sample['numerical_data'].numpy() if hasattr(sample['numerical_data'], 'numpy') else sample['numerical_data']
+                        
+                        sample_info = {
+                            'domain': domain,
+                            'ts_length': len(numerical_data),
+                            'n_features': numerical_data.shape[1] if len(numerical_data.shape) > 1 else 1,
+                            'text': sample['text'],
+                            'text_length': len(sample['text']),
+                            'start_date': sample['start_date'],
+                            'end_date': sample['end_date'],
+                            'textual_sources': sample.get('textual_sources', 0),
+                            'time_series': numerical_data,
+                            'sample_idx': i
+                        }
+                        
+                        dataset_info['samples'].append(sample_info)
+                    
+                    logger.info(f"Loaded {info['num_samples']} samples for {domain}")
+                    
+                except Exception as domain_error:
+                    logger.warning(f"Failed to load domain {domain}: {domain_error}")
+                    # Continue with other domains
+                    continue
+            
+            if dataset_info['total_samples'] == 0:
+                logger.error("No data samples could be loaded from any domain")
+                return {'error': 'No data samples could be loaded', 'samples': []}
+            
+            logger.info(f"Successfully loaded {dataset_info['total_samples']} total samples from {len(dataset_info['domain_distribution'])} domains")
+            return dataset_info
             
         except Exception as e:
             logger.error(f"Dataset structure analysis failed: {e}")

@@ -30,9 +30,15 @@ class DatabricksPipeline:
             
             self.setup_paths()
             
-            # Setup directories BEFORE loading config - ensure these are always set
-            self.checkpoint_dir = "/dbfs/mllm_checkpoints"
-            self.output_dir = "/dbfs/mllm_outputs"
+            # Setup directories BEFORE loading config - detect environment
+            if self._is_databricks_environment():
+                self.checkpoint_dir = "/dbfs/mllm_checkpoints"
+                self.output_dir = "/dbfs/mllm_outputs"
+            else:
+                # Local environment
+                self.checkpoint_dir = f"{self.project_root}/checkpoints"
+                self.output_dir = f"{self.project_root}/outputs"
+            
             self.data_dir = f"{self.project_root}/data/time_mmd"
             
             logger.info(f"Checkpoint directory: {self.checkpoint_dir}")
@@ -54,6 +60,14 @@ class DatabricksPipeline:
             if not hasattr(self, 'data_dir'):
                 self.data_dir = "/tmp/data"
             raise
+    
+    def _is_databricks_environment(self) -> bool:
+        """Check if running in Databricks environment."""
+        return (
+            'DATABRICKS_RUNTIME_VERSION' in os.environ or
+            os.path.exists('/databricks') or
+            '/Workspace/' in os.getcwd()
+        )
         
     def _detect_project_root(self) -> str:
         """Auto-detect project root in Databricks."""
