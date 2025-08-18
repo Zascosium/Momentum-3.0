@@ -33,6 +33,9 @@ if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
             break
         current_path = current_path.parent
 
+# Setup logger early for import fallbacks
+logger = logging.getLogger(__name__)
+
 # Import with fallbacks for different execution contexts
 try:
     from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
@@ -77,8 +80,6 @@ except ImportError:
                 self.output_dir = output_dir
         def load_config_for_training():
             return {}
-
-logger = logging.getLogger(__name__)
 
 
 class DataExplorationPipeline:
