@@ -218,8 +218,14 @@ class DatabricksPipeline:
         try:
             from pipelines.exploration_pipeline import DataExplorationPipeline
             
-            pipeline = DataExplorationPipeline(self.config)
-            results = pipeline.run(domains=domains)
+            # Create exploration pipeline with proper parameters
+            exploration_output_dir = f"{self.output_dir}/exploration"
+            pipeline = DataExplorationPipeline(
+                config=self.config,
+                output_dir=exploration_output_dir,
+                cache_dir=f"{self.output_dir}/cache"
+            )
+            results = pipeline.run(sample_size=1000, generate_report=True)
             
             # Save results
             output_path = f"{self.output_dir}/exploration_results.json"

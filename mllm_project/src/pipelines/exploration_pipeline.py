@@ -33,13 +33,50 @@ if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
             break
         current_path = current_path.parent
 
-# Import with fallbacks
+# Import with fallbacks for different execution contexts
 try:
     from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
 except ImportError:
-    from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
-from utils.visualization import TrainingVisualizer
-from utils.config_loader import load_config_for_training
+    try:
+        # Try absolute import from src
+        import sys
+        from pathlib import Path
+        src_path = Path(__file__).parent.parent
+        if str(src_path) not in sys.path:
+            sys.path.insert(0, str(src_path))
+        from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+    except ImportError:
+        # Final fallback - try direct import
+        try:
+            import preprocessing
+            TimeSeriesPreprocessor = preprocessing.TimeSeriesPreprocessor
+            TextPreprocessor = preprocessing.TextPreprocessor
+        except ImportError as e:
+            logger.error(f"Failed to import preprocessing classes: {e}")
+            # Create dummy classes for exploration
+            class TimeSeriesPreprocessor:
+                def __init__(self, config=None):
+                    pass
+            class TextPreprocessor:
+                def __init__(self, config=None):
+                    pass
+# Import utilities with fallbacks
+try:
+    from utils.visualization import TrainingVisualizer
+    from utils.config_loader import load_config_for_training
+except ImportError:
+    try:
+        # Try with sys.path already updated above
+        from utils.visualization import TrainingVisualizer
+        from utils.config_loader import load_config_for_training
+    except ImportError as e:
+        logger.warning(f"Could not import utilities: {e}")
+        # Create dummy classes
+        class TrainingVisualizer:
+            def __init__(self, output_dir):
+                self.output_dir = output_dir
+        def load_config_for_training():
+            return {}
 
 logger = logging.getLogger(__name__)
 
