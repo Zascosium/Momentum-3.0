@@ -225,31 +225,18 @@ class EvaluationPipeline:
     
     def _setup_test_data(self, test_split: str):
         """Setup test data loader."""
-        from torch.utils.data import DataLoader, TensorDataset
+        from torch.utils.data import DataLoader
         
-        # For demonstration, create synthetic test data
-        batch_size = self.config.get('evaluation', {}).get('batch_size', 32)
-        num_test_samples = 500
-        ts_seq_len = self.config['time_series']['max_length']
-        text_seq_len = self.config['text']['tokenizer']['max_length']
-        n_features = 3
-        vocab_size = 50257
+        # Load real test data from configured data source
+        data_config = self.config.get('data', {})
+        data_path = data_config.get('data_dir', './data')
         
-        # Create synthetic test data
-        test_ts = torch.randn(num_test_samples, ts_seq_len, n_features)
-        test_text = torch.randint(0, vocab_size, (num_test_samples, text_seq_len))
-        test_dataset = TensorDataset(test_ts, test_text)
+        if not os.path.exists(data_path):
+            raise FileNotFoundError(f"Data directory not found: {data_path}")
         
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=0
-        )
-        
-        logger.info(f"Test data loaded: {len(test_dataset)} samples, {len(test_loader)} batches")
-        
-        return test_loader
+        # Load actual test dataset
+        # This should be implemented based on your specific data format
+        raise NotImplementedError("Real test data loading not implemented. Please implement data loading for your specific dataset format.")
     
     def _quantitative_evaluation(self, test_loader, save_predictions: bool) -> Dict[str, Any]:
         """Run quantitative evaluation metrics."""

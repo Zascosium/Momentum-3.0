@@ -53,36 +53,8 @@ try:
     else:
         from models.multimodal_model import MultimodalLLM
 except Exception as e:
-    print(f"⚠️ Could not load MultimodalLLM: {e}")
-    # Create mock MultimodalLLM for demo
-    class MockMultimodalLLM:
-        def __init__(self, config_or_path):
-            self.config = config_or_path if isinstance(config_or_path, dict) else {}
-            self.device = 'cpu'
-            print("⚠️ Using MockMultimodalLLM for demo")
-        
-        def to(self, device):
-            self.device = device
-            return self
-        
-        def eval(self):
-            return self
-        
-        def generate(self, time_series=None, text_input_ids=None, max_length=50, **kwargs):
-            """Mock generation method"""
-            batch_size = 1
-            vocab_size = 50257
-            if TORCH_AVAILABLE:
-                return torch.randint(0, vocab_size, (batch_size, max_length))
-            else:
-                import numpy as np
-                return np.random.randint(0, vocab_size, (batch_size, max_length))
-        
-        @classmethod
-        def load_pretrained(cls, model_path):
-            return cls({})
-    
-    MultimodalLLM = MockMultimodalLLM
+    print(f"❌ Could not load MultimodalLLM: {e}")
+    raise ImportError(f"Failed to import MultimodalLLM: {e}")
 
 logger = logging.getLogger(__name__)
 
@@ -143,32 +115,7 @@ class DemoPipeline:
     
     def _create_sample_data(self, batch_size: int = 1):
         """Create sample time series and text data for demonstration."""
-        if not TORCH_AVAILABLE:
-            # Create numpy arrays when PyTorch is not available
-            import numpy as np
-            ts_seq_len = self.config.get('time_series', {}).get('max_length', 100)
-            text_seq_len = self.config.get('text', {}).get('max_length', 50)
-            n_features = 3
-            
-            return {
-                'time_series': np.random.randn(batch_size, ts_seq_len, n_features),
-                'ts_attention_mask': np.ones((batch_size, ts_seq_len), dtype=bool),
-                'text_input_ids': np.random.randint(0, 50257, (batch_size, text_seq_len)),
-                'text_attention_mask': np.ones((batch_size, text_seq_len), dtype=bool)
-            }
-        
-        # Create PyTorch tensors
-        ts_seq_len = self.config.get('time_series', {}).get('max_length', 100)
-        text_seq_len = self.config.get('text', {}).get('max_length', 50)
-        n_features = 3
-        vocab_size = 50257
-        
-        return {
-            'time_series': torch.randn(batch_size, ts_seq_len, n_features),
-            'ts_attention_mask': torch.ones(batch_size, ts_seq_len, dtype=torch.bool),
-            'text_input_ids': torch.randint(0, vocab_size, (batch_size, text_seq_len)),
-            'text_attention_mask': torch.ones(batch_size, text_seq_len, dtype=torch.bool)
-        }
+        raise NotImplementedError("Sample data generation not implemented. Use real data instead.")
     
     def _decode_tokens(self, token_ids):
         """Enhanced token decoding for demonstration with better fallback."""

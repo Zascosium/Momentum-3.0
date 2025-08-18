@@ -412,10 +412,7 @@ class InferencePipeline:
                 if not checkpoint_path.exists():
                     checkpoint_path = self.model_path / 'final_model.pt'
             else:
-                # Create mock model for demonstration
-                logger.warning("Model not found, using mock model")
-                self.model = self._create_mock_model()
-                return
+                raise FileNotFoundError(f"Model not found at {self.model_path}")
             
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
             model_config = checkpoint.get('config', self.config)
@@ -427,22 +424,7 @@ class InferencePipeline:
         
         logger.info("Model loaded successfully")
     
-    def _create_mock_model(self):
-        """
-        Create mock model for demonstration.
-        """
-        class MockModel:
-            def generate(self, **kwargs):
-                time.sleep(0.1)  # Simulate processing
-                responses = [
-                    "The time series shows an upward trend with periodic fluctuations.",
-                    "Analysis reveals seasonal patterns with increasing amplitude.",
-                    "The data exhibits volatility clustering and mean reversion.",
-                    "Temporal dynamics suggest underlying cyclic behavior."
-                ]
-                return random.choice(responses)
-        
-        return MockModel()
+
     
     def _standard_generate(self, time_series: np.ndarray, prompt: str,
                           temperature: float = 0.8) -> str:
@@ -469,11 +451,11 @@ class InferencePipeline:
                 return self._generate_with_model(time_series, prompt, temperature)
             
             else:
-                return self._mock_generation(prompt)
+                raise RuntimeError("No model or inference engine available")
                 
         except Exception as e:
             logger.error(f"Generation failed: {e}")
-            return self._mock_generation(prompt)
+            raise
     
     def _generate_with_model(self, time_series: np.ndarray, prompt: str, temperature: float) -> str:
         """Generate text using the loaded model"""
@@ -609,16 +591,7 @@ class InferencePipeline:
             logger.warning(f"Forward generation failed: {e}")
             return "Analysis based on the time series pattern and input prompt."
     
-    def _mock_generation(self, prompt: str) -> str:
-        """Generate mock response when model is not available"""
-        responses = [
-            f"Based on the time series analysis for '{prompt[:30]}...': The data shows clear temporal patterns with seasonal trends and volatility clustering.",
-            f"Analysis of '{prompt[:30]}...': The time series exhibits mean-reverting behavior with periodic fluctuations and increasing variance over time.",
-            f"For '{prompt[:30]}...': The data indicates strong autocorrelation with trend components and potential structural breaks in the series.",
-            f"Regarding '{prompt[:30]}...': The temporal dynamics suggest underlying cyclical patterns with heteroskedastic noise characteristics."
-        ]
-        import random
-        return random.choice(responses)
+
     
     def _streaming_generate(self, time_series: np.ndarray, prompt: str,
                            temperature: float = 0.8,

@@ -48,9 +48,13 @@ if torch.cuda.is_available():
     print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 
 # Add project to path
-project_root = "/databricks/driver/mllm_project"
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+project_root = "/Workspace/Repos/mllm_project" if "/Workspace/Repos" in os.getcwd() else "/Workspace/Users/user@company.com/mllm_project"
+sys.path.insert(0, f"{project_root}/src")
+sys.path.insert(0, project_root)
+
+print(f"Project Root: {project_root}")
+print(f"Python Path Updated: {len(sys.path)} paths")
+print("✅ Environment setup complete!")
 
 print("✅ Environment validation complete")
 

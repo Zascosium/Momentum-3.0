@@ -99,14 +99,7 @@ except (ImportError, ValueError):
                     return yaml.safe_load(f)
             return {}
         
-        def get_databricks_environment():
-            class MockEnv:
-                def is_databricks(self): return False
-                def normalize_path(self, path, **kwargs): return str(path)
-            return MockEnv()
-        
-        def configure_for_databricks(config): return config
-        def setup_databricks_logging(): pass
+        from utils.databricks_utils import get_databricks_environment, configure_for_databricks, setup_databricks_logging
 
 logger = logging.getLogger(__name__)
 

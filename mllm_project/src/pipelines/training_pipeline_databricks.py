@@ -46,73 +46,9 @@ except ImportError:
     def tqdm(iterable, *args, **kwargs):
         return iterable
 
-# Create mock MultimodalLLM for Databricks
-class MockMultimodalLLM:
-    """Mock MultimodalLLM for when imports fail"""
-    def __init__(self, config):
-        self.config = config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if torch else 'cpu'
-        print("⚠️ Using MockMultimodalLLM - imports failed")
-    
-    def to(self, device):
-        return self
-    
-    def train(self):
-        return self
-    
-    def eval(self):
-        return self
-
-# Try to import real MultimodalLLM
-try:
-    import importlib.util
-    model_file = src_dir / "models" / "multimodal_model.py"
-    if model_file.exists():
-        spec = importlib.util.spec_from_file_location("multimodal_model", model_file)
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            MultimodalLLM = module.MultimodalLLM
-        else:
-            MultimodalLLM = MockMultimodalLLM
-    else:
-        MultimodalLLM = MockMultimodalLLM
-except Exception as e:
-    print(f"⚠️ Could not load MultimodalLLM: {e}")
-    MultimodalLLM = MockMultimodalLLM
-
-# Create mock trainer
-class MockMultimodalTrainer:
-    """Mock trainer for when imports fail"""
-    def __init__(self, model, config, *args, **kwargs):
-        self.model = model
-        self.config = config
-        print("⚠️ Using MockMultimodalTrainer - imports failed")
-    
-    def train(self, *args, **kwargs):
-        print("Mock training completed")
-        return {
-            'final_metrics': {'loss': 2.5, 'accuracy': 0.75},
-            'epochs_completed': self.config.get('training', {}).get('epochs', 1),
-            'status': 'completed'
-        }
-
-# Try to import real trainer
-try:
-    trainer_file = src_dir / "training" / "trainer.py"
-    if trainer_file.exists():
-        spec = importlib.util.spec_from_file_location("trainer", trainer_file)
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            MultimodalTrainer = module.MultimodalTrainer
-        else:
-            MultimodalTrainer = MockMultimodalTrainer
-    else:
-        MultimodalTrainer = MockMultimodalTrainer
-except Exception as e:
-    print(f"⚠️ Could not load MultimodalTrainer: {e}")
-    MultimodalTrainer = MockMultimodalTrainer
+# Import real components
+from models.multimodal_model import MultimodalLLM
+from training.trainer import MultimodalTrainer
 
 logger = logging.getLogger(__name__)
 

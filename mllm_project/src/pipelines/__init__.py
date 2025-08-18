@@ -1,12 +1,8 @@
 """
-Pipeline modules for the Multimodal LLM project.
+Pipelines Package
+================
 
-This package contains pipeline implementations for different stages:
-- Data exploration
-- Model training  
-- Model evaluation
-- Inference demonstration
-- Pipeline orchestration
+This package contains pipeline implementations for different stages of the ML workflow.
 """
 
 try:

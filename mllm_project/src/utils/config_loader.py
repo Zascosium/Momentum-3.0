@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from omegaconf import OmegaConf, DictConfig
 import json
 
+logger = logging.getLogger(__name__)
+
 # Import our config validator
 try:
     from .config_validator import ConfigValidator, validate_and_fix_config
@@ -22,8 +24,6 @@ except ImportError:
         ConfigValidator = None
         validate_and_fix_config = None
         logger.warning("ConfigValidator not available - advanced validation disabled")
-
-logger = logging.getLogger(__name__)
 
 @dataclass
 class ConfigPaths:

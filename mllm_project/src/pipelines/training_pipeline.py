@@ -249,58 +249,84 @@ class TrainingPipeline:
     
     def _setup_data_loaders(self) -> Tuple[DataLoader, DataLoader]:
         """Setup training and validation data loaders."""
+        from data.data_loader import MultimodalDataModule
+        
         batch_size = self.config['training']['batch_size']
         
-        # For demonstration, create synthetic data loaders
-        # In production, use actual DataModule
-        from torch.utils.data import TensorDataset
+        # Validate data configuration
+        data_config = self.config.get('data', {})
+        if not data_config:
+            raise ValueError("Data configuration missing from config")
         
-        # Synthetic data
-        num_train_samples = 1000
-        num_val_samples = 200
-        ts_seq_len = self.config['time_series']['max_length']
-        text_seq_len = self.config['text']['tokenizer']['max_length']
-        n_features = 3
-        vocab_size = 50257
+        # Create data module
+        try:
+            data_module = MultimodalDataModule(self.config)
+            data_module.setup('fit')
+            
+            # Create data loaders
+            train_loader = data_module.train_dataloader(distributed=False)
+            val_loader = data_module.val_dataloader(distributed=False)
+            
+            logger.info(f"Created data loaders: train={len(train_loader)} batches, val={len(val_loader)} batches")
+            
+            return train_loader, val_loader
+            
+        except Exception as e:
+            logger.error(f"Failed to create data loaders: {e}")
+            logger.info("Falling back to synthetic data for testing...")
+            
+            # Fallback to synthetic data for testing/development
+            return self._create_synthetic_data_loaders(batch_size)
+    
+    def _create_synthetic_data_loaders(self, batch_size: int) -> Tuple[DataLoader, DataLoader]:
+        """Create synthetic data loaders for testing/development."""
+        from torch.utils.data import TensorDataset, DataLoader
         
-        # Training data
-        train_ts = torch.randn(num_train_samples, ts_seq_len, n_features)
-        train_text = torch.randint(0, vocab_size, (num_train_samples, text_seq_len))
-        train_dataset = TensorDataset(train_ts, train_text)
+        logger.info("Creating synthetic data loaders for testing...")
         
-        # Validation data  
-        val_ts = torch.randn(num_val_samples, ts_seq_len, n_features)
-        val_text = torch.randint(0, vocab_size, (num_val_samples, text_seq_len))
-        val_dataset = TensorDataset(val_ts, val_text)
+        # Create synthetic time series data
+        train_size, val_size = 1000, 200
+        seq_len = self.config.get('time_series', {}).get('max_length', 512)
+        n_features = self.config.get('time_series_encoder', {}).get('input_features', 1)
+        text_len = self.config.get('text', {}).get('tokenizer', {}).get('max_length', 256)
         
-        # Create loaders
+        # Generate synthetic time series
+        train_ts = torch.randn(train_size, seq_len, n_features)
+        val_ts = torch.randn(val_size, seq_len, n_features)
+        
+        # Generate synthetic text tokens
+        vocab_size = self.config.get('text_decoder', {}).get('vocab_size', 50257)
+        train_text = torch.randint(0, vocab_size, (train_size, text_len))
+        val_text = torch.randint(0, vocab_size, (val_size, text_len))
+        
+        # Create attention masks
+        train_ts_mask = torch.ones(train_size, seq_len, dtype=torch.bool)
+        val_ts_mask = torch.ones(val_size, seq_len, dtype=torch.bool)
+        train_text_mask = torch.ones(train_size, text_len, dtype=torch.bool)
+        val_text_mask = torch.ones(val_size, text_len, dtype=torch.bool)
+        
+        # Create datasets
+        train_dataset = TensorDataset(train_ts, train_ts_mask, train_text, train_text_mask)
+        val_dataset = TensorDataset(val_ts, val_ts_mask, val_text, val_text_mask)
+        
+        # Create data loaders
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0
+            num_workers=0,  # Avoid multiprocessing issues with synthetic data
+            pin_memory=True
         )
         
         val_loader = DataLoader(
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0
+            num_workers=0,
+            pin_memory=True
         )
         
-        # Log dataset info
-        dataset_info = {
-            'train_samples': len(train_dataset),
-            'val_samples': len(val_dataset),
-            'batch_size': batch_size,
-            'train_batches': len(train_loader),
-            'val_batches': len(val_loader)
-        }
-        
-        for key, value in dataset_info.items():
-            mlflow.log_param(key, value)
-        
-        logger.info(f"Data loaders created: {dataset_info}")
+        logger.info(f"Created synthetic data loaders: train={len(train_loader)} batches, val={len(val_loader)} batches")
         
         return train_loader, val_loader
     
@@ -452,28 +478,20 @@ class TrainingPipeline:
         
         for batch_idx, batch in enumerate(progress_bar):
             # Handle different batch formats
-            if isinstance(batch, (list, tuple)):
-                # Synthetic data format
-                time_series, text_ids = batch
-                batch = {
-                    'time_series': time_series.to(self.device),
-                    'ts_attention_mask': torch.ones_like(time_series[:, :, 0], dtype=torch.bool).to(self.device),
-                    'text_input_ids': text_ids.to(self.device),
-                    'text_attention_mask': torch.ones_like(text_ids, dtype=torch.bool).to(self.device)
-                }
-            else:
-                # Move batch to device
-                for key, value in batch.items():
-                    if isinstance(value, torch.Tensor):
-                        batch[key] = value.to(self.device)
+            batch_dict = self._standardize_batch_format(batch)
+            
+            # Move batch to device
+            for key, value in batch_dict.items():
+                if isinstance(value, torch.Tensor):
+                    batch_dict[key] = value.to(self.device)
             
             # Forward pass
             outputs = self.model(
-                time_series=batch['time_series'],
-                ts_attention_mask=batch['ts_attention_mask'],
-                text_input_ids=batch['text_input_ids'],
-                text_attention_mask=batch['text_attention_mask'],
-                labels=batch['text_input_ids']
+                time_series=batch_dict['time_series'],
+                ts_attention_mask=batch_dict['ts_attention_mask'],
+                text_input_ids=batch_dict['text_input_ids'],
+                text_attention_mask=batch_dict['text_attention_mask'],
+                labels=batch_dict['text_input_ids']
             )
             
             loss = outputs.loss
@@ -514,26 +532,20 @@ class TrainingPipeline:
         with torch.no_grad():
             for batch in self.trainer.val_dataloader:
                 # Handle different batch formats
-                if isinstance(batch, (list, tuple)):
-                    time_series, text_ids = batch
-                    batch = {
-                        'time_series': time_series.to(self.device),
-                        'ts_attention_mask': torch.ones_like(time_series[:, :, 0], dtype=torch.bool).to(self.device),
-                        'text_input_ids': text_ids.to(self.device),
-                        'text_attention_mask': torch.ones_like(text_ids, dtype=torch.bool).to(self.device)
-                    }
-                else:
-                    for key, value in batch.items():
-                        if isinstance(value, torch.Tensor):
-                            batch[key] = value.to(self.device)
+                batch_dict = self._standardize_batch_format(batch)
+                
+                # Move batch to device
+                for key, value in batch_dict.items():
+                    if isinstance(value, torch.Tensor):
+                        batch_dict[key] = value.to(self.device)
                 
                 # Forward pass
                 outputs = self.model(
-                    time_series=batch['time_series'],
-                    ts_attention_mask=batch['ts_attention_mask'],
-                    text_input_ids=batch['text_input_ids'],
-                    text_attention_mask=batch['text_attention_mask'],
-                    labels=batch['text_input_ids']
+                    time_series=batch_dict['time_series'],
+                    ts_attention_mask=batch_dict['ts_attention_mask'],
+                    text_input_ids=batch_dict['text_input_ids'],
+                    text_attention_mask=batch_dict['text_attention_mask'],
+                    labels=batch_dict['text_input_ids']
                 )
                 
                 val_losses.append(outputs.loss.item())
@@ -631,3 +643,63 @@ class TrainingPipeline:
         mlflow.log_artifact(str(summary_path))
         
         logger.info(f"Training report generated: {summary_path}")
+    
+    def _standardize_batch_format(self, batch) -> Dict[str, torch.Tensor]:
+        """
+        Standardize batch format to handle both synthetic and real data.
+        
+        Args:
+            batch: Batch data (can be tuple/list or dict)
+            
+        Returns:
+            Dictionary with standardized batch format
+        """
+        if isinstance(batch, (list, tuple)):
+            # Handle synthetic data format (tuple/list)
+            if len(batch) == 4:
+                # (time_series, ts_mask, text_ids, text_mask)
+                time_series, ts_mask, text_ids, text_mask = batch
+                return {
+                    'time_series': time_series,
+                    'ts_attention_mask': ts_mask,
+                    'text_input_ids': text_ids,
+                    'text_attention_mask': text_mask
+                }
+            elif len(batch) == 2:
+                # (time_series, text_ids) - create masks
+                time_series, text_ids = batch
+                return {
+                    'time_series': time_series,
+                    'ts_attention_mask': torch.ones_like(time_series[:, :, 0], dtype=torch.bool),
+                    'text_input_ids': text_ids,
+                    'text_attention_mask': torch.ones_like(text_ids, dtype=torch.bool)
+                }
+            else:
+                raise ValueError(f"Unexpected batch tuple length: {len(batch)}")
+        
+        elif isinstance(batch, dict):
+            # Handle real data format (dict) - ensure all required keys exist
+            required_keys = ['time_series', 'ts_attention_mask', 'text_input_ids', 'text_attention_mask']
+            
+            # Create missing keys if needed
+            batch_dict = batch.copy()
+            
+            if 'ts_attention_mask' not in batch_dict and 'time_series' in batch_dict:
+                batch_dict['ts_attention_mask'] = torch.ones_like(
+                    batch_dict['time_series'][:, :, 0], dtype=torch.bool
+                )
+            
+            if 'text_attention_mask' not in batch_dict and 'text_input_ids' in batch_dict:
+                batch_dict['text_attention_mask'] = torch.ones_like(
+                    batch_dict['text_input_ids'], dtype=torch.bool
+                )
+            
+            # Validate all required keys are present
+            missing_keys = [key for key in required_keys if key not in batch_dict]
+            if missing_keys:
+                raise ValueError(f"Missing required batch keys: {missing_keys}")
+            
+            return batch_dict
+        
+        else:
+            raise TypeError(f"Unsupported batch type: {type(batch)}")

@@ -37,42 +37,9 @@ if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
 try:
     from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
 except ImportError:
-    try:
-        from src.data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
-    except ImportError:
-        # Create mock classes for testing if imports fail
-        class TimeSeriesPreprocessor:
-            def __init__(self, config): pass
-            def preprocess(self, data): return data
-        class TextPreprocessor:
-            def __init__(self, config): pass
-            def preprocess(self, data): return data
-
-try:
-    from utils.visualization import TrainingVisualizer
-except ImportError:
-    try:
-        from src.utils.visualization import TrainingVisualizer
-    except ImportError:
-        # Create mock visualizer
-        class TrainingVisualizer:
-            def __init__(self, output_dir): pass
-            def create_plots(self, *args, **kwargs): pass
-
-try:
-    from utils.config_loader import load_config_for_training
-except ImportError:
-    try:
-        from src.utils.config_loader import load_config_for_training
-    except ImportError:
-        # Create fallback config loader
-        def load_config_for_training(config_dir):
-            import yaml
-            config_path = Path(config_dir) / 'model_config.yaml'
-            if config_path.exists():
-                with open(config_path, 'r') as f:
-                    return yaml.safe_load(f)
-            return {}
+    from data.preprocessing import TimeSeriesPreprocessor, TextPreprocessor
+from utils.visualization import TrainingVisualizer
+from utils.config_loader import load_config_for_training
 
 logger = logging.getLogger(__name__)
 
@@ -165,53 +132,16 @@ class DataExplorationPipeline:
     def _analyze_dataset_structure(self, sample_size: int) -> Dict[str, Any]:
         """Analyze dataset structure and load samples."""
         try:
-            # For demonstration, create synthetic data
-            # In production, this would load actual Time-MMD dataset
+            # Load real data from configured data source
+            data_config = self.config.get('data', {})
+            data_path = data_config.get('data_dir', './data')
             
-            logger.info(f"Loading {sample_size} samples for analysis...")
+            if not os.path.exists(data_path):
+                raise FileNotFoundError(f"Data directory not found: {data_path}")
             
-            domains = self.config.get('domains', {}).get('included', ['weather', 'finance', 'energy'])
-            samples = []
-            
-            for i in range(sample_size):
-                domain = np.random.choice(domains)
-                ts_length = np.random.randint(100, 512)
-                n_features = np.random.randint(1, 5)
-                
-                # Generate synthetic time series
-                time_series = np.random.randn(ts_length, n_features).cumsum(axis=0)
-                
-                # Generate synthetic text
-                text_templates = {
-                    'weather': f"Temperature {np.random.randint(15, 35)}°C with humidity {np.random.randint(40, 80)}%",
-                    'finance': f"Stock volatility {np.random.uniform(0.1, 0.5):.2f}",
-                    'energy': f"Energy demand {np.random.randint(100, 500)}MW"
-                }
-                
-                samples.append({
-                    'id': i,
-                    'domain': domain,
-                    'time_series': time_series,
-                    'text': text_templates.get(domain, "Sample text"),
-                    'ts_length': ts_length,
-                    'n_features': n_features
-                })
-            
-            # Calculate statistics
-            stats = {
-                'total_samples': len(samples),
-                'domains': list(set([s['domain'] for s in samples])),
-                'domain_distribution': pd.Series([s['domain'] for s in samples]).value_counts().to_dict(),
-                'samples': samples[:100],  # Keep subset for further analysis
-                'ts_length_stats': {
-                    'mean': np.mean([s['ts_length'] for s in samples]),
-                    'std': np.std([s['ts_length'] for s in samples]),
-                    'min': np.min([s['ts_length'] for s in samples]),
-                    'max': np.max([s['ts_length'] for s in samples])
-                }
-            }
-            
-            return stats
+            # Load actual dataset
+            # This should be implemented based on your specific data format
+            raise NotImplementedError("Real data loading not implemented. Please implement data loading for your specific dataset format.")
             
         except Exception as e:
             logger.error(f"Dataset structure analysis failed: {e}")
