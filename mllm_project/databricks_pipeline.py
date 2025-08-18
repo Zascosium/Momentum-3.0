@@ -24,35 +24,84 @@ class DatabricksPipeline:
     
     def __init__(self, project_root: Optional[str] = None):
         """Initialize the Databricks pipeline."""
-        self.project_root = project_root or self._detect_project_root()
-        self.setup_paths()
-        self.config = self.load_config()
-        
-        # Setup directories
-        self.checkpoint_dir = "/dbfs/mllm_checkpoints"
-        self.output_dir = "/dbfs/mllm_outputs"
-        self.data_dir = f"{self.project_root}/data/time_mmd"
-        
-        self._ensure_directories()
+        try:
+            self.project_root = project_root or self._detect_project_root()
+            logger.info(f"Project root detected: {self.project_root}")
+            
+            self.setup_paths()
+            self.config = self.load_config()
+            
+            # Setup directories - ensure these are always set
+            self.checkpoint_dir = "/dbfs/mllm_checkpoints"
+            self.output_dir = "/dbfs/mllm_outputs"
+            self.data_dir = f"{self.project_root}/data/time_mmd"
+            
+            logger.info(f"Checkpoint directory: {self.checkpoint_dir}")
+            logger.info(f"Output directory: {self.output_dir}")
+            logger.info(f"Data directory: {self.data_dir}")
+            
+            self._ensure_directories()
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize DatabricksPipeline: {e}")
+            # Set fallback values to prevent attribute errors
+            if not hasattr(self, 'checkpoint_dir'):
+                self.checkpoint_dir = "/tmp/mllm_checkpoints"
+            if not hasattr(self, 'output_dir'):
+                self.output_dir = "/tmp/mllm_outputs"
+            if not hasattr(self, 'data_dir'):
+                self.data_dir = "/tmp/data"
+            raise
         
     def _detect_project_root(self) -> str:
         """Auto-detect project root in Databricks."""
+        # First try current working directory
+        cwd = os.getcwd()
+        logger.info(f"Current working directory: {cwd}")
+        
+        # Check if we're already in the project root
+        if os.path.exists(f"{cwd}/src") and os.path.exists(f"{cwd}/config"):
+            return cwd
+        
+        # Check if we're in mllm_project subdirectory
+        if "mllm_project" in cwd:
+            return cwd
+            
+        # Try parent directory if we're in a subdirectory
+        parent_dir = os.path.dirname(cwd)
+        if os.path.exists(f"{parent_dir}/src") and os.path.exists(f"{parent_dir}/config"):
+            return parent_dir
+        
+        # Common Databricks workspace patterns
         possible_roots = [
             "/Workspace/Repos/mllm_project",
-            "/Workspace/Users/user@company.com/mllm_project",
+            "/Workspace/Users/*/mllm_project",  # Wildcard pattern
             "/databricks/driver/mllm_project"
         ]
         
+        # Try exact matches first
         for root in possible_roots:
-            if os.path.exists(root):
+            if "*" not in root and os.path.exists(root):
                 return root
-                
-        # Fallback: current working directory
-        cwd = os.getcwd()
-        if "mllm_project" in cwd:
-            return cwd
         
-        raise RuntimeError("Could not detect project root. Please specify project_root parameter.")
+        # Try wildcard patterns for user-specific paths
+        import glob
+        for pattern in possible_roots:
+            if "*" in pattern:
+                matches = glob.glob(pattern)
+                for match in matches:
+                    if os.path.exists(f"{match}/src") and os.path.exists(f"{match}/config"):
+                        return match
+        
+        # Final fallback - look for any directory containing src and config
+        workspace_dirs = ["/Workspace/Users", "/Workspace/Repos", "/databricks/driver"]
+        for workspace_dir in workspace_dirs:
+            if os.path.exists(workspace_dir):
+                for root, dirs, files in os.walk(workspace_dir):
+                    if "src" in dirs and "config" in dirs and "mllm_project" in root:
+                        return root
+                        
+        raise RuntimeError(f"Could not detect project root. Current directory: {cwd}. Please specify project_root parameter.")
     
     def setup_paths(self):
         """Setup Python paths for imports."""
